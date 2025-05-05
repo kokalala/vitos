@@ -1,0 +1,170 @@
+#!/bin/sh
+
+##################################################
+### 在系统开机时，读取已挂载列表，挂载所有设备
+##################################################
+
+SMB_MOUNT_RECORD="/mnt/settings/vitos_smb_mount_record"		#挂载结果存储位置
+
+function t_mount1(){
+	ip=$(echo "${1}" | grep -Po 'ip[=]+\K[^&]+' | urldecode | grep -E -o "([0-9]{1,3}[\.]){3}[0-9]{1,3}")
+	if [[ -z "${ip}" ]]; then
+		echo "没有IP"		#通过主机名获取ip地址失败
+		return 1
+	fi
+	share=$(echo "${1}" | grep -Po 'share[=]+\K[^&]+' | urldecode)
+	if [[ -z ${share} ]]; then
+		echo "没有目录"		#没传入 文件夹名称
+		return 1
+	fi
+	smb="//${ip}/${share}"		#samba服务器ip和要挂载的文件夹路径
+	dir="${MOUNT_PATH}${ip}_$(echo ${share} | sed 's@/@_@g')"		#挂载目录的文件夹完整路径
+	echo -e "smb：${smb}\ndir：${dir}"
+	if [[ ! -d "{dir}" ]]; then		#创建文件夹
+		mkdir -p "${dir}"
+	fi
+
+	#获取密码并解密
+	psd=""
+	password=$(echo "${1}" | grep -Po 'password[=]+\K[^&]+' | urldecode)
+	if [[ -n "${password}" ]]; then
+		psd=$(thunder_aes_cbc128 "${password}")		#密码解析
+		if [[ -z "${psd}" ]]; then
+			echo -e "解密前密码：${password}"
+			echo "密码解析失败"
+			return 1
+		fi
+	fi
+	#获取用户名并挂载
+	user=$(echo "${1}" | grep -Po 'user[=]+\K[^&]+' | urldecode)
+	if [[ -n "${user}" ]]; then
+		echo -e "user${user}\npassword：${password}"
+		mount -t cifs -v "${smb}" "${dir}" -o username="${user}",password="${psd}",iocharset=utf8 2>&1
+		echo "挂载结果:$?"
+	else
+		mount -t cifs -v "${smb}" "${dir}" -o password="${psd}",iocharset=utf8 2>&1
+		echo "挂载结果:$?"
+	fi
+}
+
+
+#开机时挂载全部
+function t_mount(){
+	MOUNT_PATH="/media/nas/"		#文件夹挂载路径
+	SMB_lOG_DIR="/tmp/log_vitos_samba/"		#日志文件夹
+	SMB_MOUNT_lOG="${SMB_lOG_DIR}smb_mount.log"		#mount日志
+	alias urldecode='sed "s@+@ @g;s@%@\\\\x@g" | xargs -0 printf "%b"'		#解码
+
+	if [[ ! -e "${SMB_lOG_DIR}" ]]; then
+		mkdir -p "${SMB_lOG_DIR}"
+	fi
+	echo -e "开机挂载开始 $(date +%s)" > "${SMB_MOUNT_lOG}"
+
+	if [[ ! -d "${MOUNT_PATH}" ]]; then
+		mkdir -p "${MOUNT_PATH}" >> "${SMB_MOUNT_lOG}" 2>&1
+	fi
+	if [[ ! -d "${MOUNT_PATH}" ]]; then		#media/nas 文件夹创建失败
+		echo "media/nas 文件夹创建失败" >> "${SMB_MOUNT_lOG}"
+		return 1
+	fi
+
+	#循环进行挂载
+	IFS_old=$IFS
+	IFS=$'\n'
+	for line in $(cat "${SMB_MOUNT_RECORD}");do
+		local query=$(echo "${line}" | grep -Po 'query[" :]+\K[^"]+')
+		t_mount1 "${query}" >> "${SMB_MOUNT_lOG}" 2>&1
+	done
+	IFS=$IFS_old
+
+	echo -e "开机挂载结束 $(date +%s)" >> "${SMB_MOUNT_lOG}"
+}
+
+#挂载成功后，如果有匹配就替换，没有就将信息追加到存储文件。
+function t_insert(){
+	echo -e "t_insert : \n\t${1}\n\t${2}"
+	if [[ -z "${1}" ]] || [[ -z "${2}" ]]; then
+		return 1
+	fi
+	local all="${1}${2}\"}"
+	if [[ -e "${SMB_MOUNT_RECORD}" ]]; then
+		line=$(grep -En ^"${1}.*" "${SMB_MOUNT_RECORD}" 2>/dev/null | sed -n '1p' | grep -Eo ^"[0-9]+")
+		if [[ -n ${line} ]]; then		#有匹配就替换
+			echo "替换第 ${line} 行"
+			sed -i "${line}c ${all}" "${SMB_MOUNT_RECORD}"
+		else
+			echo "追加内容"
+			echo "${all}" >> "${SMB_MOUNT_RECORD}"
+		fi
+	else
+		parent_dir=$(dirname "${SMB_MOUNT_RECORD}")
+		if [[ ! -d "${parent_dir}" ]]; then
+			echo "创建文件夹"
+			mkdir -p "${parent_dir}"
+		fi
+		echo "创建记录文件"
+		echo "${all}" > "${SMB_MOUNT_RECORD}"
+	fi
+}
+
+#删除记录表第一项匹配
+function t_delete(){
+	echo "t_delete : ${1}"
+	if [[ -z "${1}" ]]; then
+		return 1
+	fi
+	if [[ -e "${SMB_MOUNT_RECORD}" ]]; then
+		line=$(grep -En ^"${1}.*" "${SMB_MOUNT_RECORD}" 2>/dev/null | sed -n '1p' | grep -Eo ^"[0-9]+")
+		if [[ -n ${line} ]]; then		#有匹配就删除
+			echo "删除第 ${line} 行"
+			sed -i "${line}d" "${SMB_MOUNT_RECORD}"
+		fi
+	fi
+}
+
+#查询请求参数是否已保存在记录列表中，是否已挂载
+function t_is_mount(){
+	if [[ -z "${1}" ]] || [[ -z "${2}" ]]; then
+		return 0
+	fi
+	if [[ -e "${SMB_MOUNT_RECORD}" ]]; then
+		cat "${SMB_MOUNT_RECORD}" | grep ",\"query\":\"${1}\"}"$ 2>&1
+		if [[ $? -eq 0 ]]; then
+			df | grep " ${2}"$ 2>&1
+			if [[ $? -eq 0 ]]; then
+				return 1
+			fi
+		fi
+	fi
+}
+
+#返回记录表所有数据，最新添加的优先输出
+function t_query(){
+	echo -n "["
+	local i=0
+	local IFS_old=$IFS
+	IFS=$'\n'
+	for line in $(cat "${SMB_MOUNT_RECORD}");do
+		if [[ 0 -eq ${i} ]]; then
+			echo -n "$line" | grep -E -o ^'.*(,\"query\")+' | sed 's:,\"query\":}:g'
+			((i++))
+		else	
+			echo -n ",$line" | grep -E -o ^'.*(,\"query\")+' | sed 's:,\"query\":}:g'
+		fi
+	done
+	IFS=$IFS_old
+	echo -n "]"
+}
+
+if [[ ${1} = "t_mount" ]]; then
+	${1}
+	echo "开机时挂载"
+elif [[ ${1} = "t_query" ]] || [[ ${1} = "t_is_mount" ]]; then
+	${1}
+elif [[ ${1} = "t_insert" ]]; then
+	${1} "${2}" "${3}"
+elif [[ ${1} = "t_delete" ]]; then
+	${1} "${2}"
+else
+	echo "???"
+fi
