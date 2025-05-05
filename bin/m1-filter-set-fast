@@ -1,0 +1,11 @@
+#!/bin/sh
+# filter settings- fast roll off
+#register_7_val=$(i2cget -f -y 1 0x48 0x07)
+#register_7_set=$(($register_7_val | 0x9F))
+#if [ $register_7_set -ne 159 ]; then
+#    register_7_set=$(($register_7_val & 0x9F))
+#    register_7_set=`echo "obase=16; $register_7_set" |bc`
+#    i2cset -f -y 1 0x48 0x07 "0x${register_7_set}"
+#fi
+
+m1-filter-set fast > /dev/null &

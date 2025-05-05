@@ -1,0 +1,19 @@
+#!/bin/sh
+
+if [ -e /mnt/mpd/log/20.log ]; then
+    rm /mnt/mpd/log/20.log
+fi
+
+j=1
+for((i=19;i>=1;i--));
+do
+    if [ -e /mnt/mpd/log/$i.log ]; then
+        k=$(($i+$j))
+        mv /mnt/mpd/log/$i.log /mnt/mpd/log/$k.log
+    fi
+done
+
+cp /mnt/mpd/log/log /mnt/mpd/log/1.log
+rm -rf /mnt/mpd/log/log
+
+

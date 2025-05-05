@@ -1,0 +1,354 @@
+#!/bin/sh
+
+function dac_output_config_get(){
+	name=$(cat "/mnt/settings/m1-dac-output.conf" 2>/dev/null | grep ^"$1:"| grep -Po "$1:+\K[^,]+")
+	ret=$?
+	echo $name
+	return $ret
+}
+
+function dac_output_config_set(){
+
+	sed -i "/^$1/c$1:${2}" /mnt/settings/m1-dac-output.conf
+	return $?
+}
+
+if [ $# -eq 1 ]; then
+    # get value
+    if [ $1 != "dsd-dop" ] && [ $1 != "pcm-sample-rate" ] && [ $1 != "pcm-bit-depth" ] && [ $1 != "dsd-format" ] && [ $1 != "default" ]; then
+        echo "m1-dac-output-conf get param error"
+        echo "supply \"m1-dac-output-conf dsd-dop\""
+        echo "       \"m1-dac-output-conf pcm-sample-rate\""
+        echo "       \"m1-dac-output-conf pcm-bit-depth\""
+        echo "       \"m1-dac-output-conf dsd-format\""
+        echo "       \"m1-dac-output-conf default\""
+        exit 1
+    fi
+
+    if [ $1 == "default" ]; then
+        dsd_dop=$(dac_output_config_get "dsd-dop")
+        sample_rate=$(dac_output_config_get "pcm-sample-rate")
+        pcm_bit_depth=$(dac_output_config_get "pcm-bit-depth")
+        dsd_format=$(dac_output_config_get "dsd-format")
+        
+        if [ $dsd_dop != "yes" ]; then
+            echo "no"
+            exit 0
+        fi
+
+        if [ $sample_rate != "384000" ]; then
+            echo "no"
+            exit 0
+        fi
+        
+        if [ $pcm_bit_depth != "32" ]; then
+            echo "no"
+            exit 0
+        fi
+
+        if [ $dsd_format != "128" ]; then
+            echo "no"
+            exit 0
+        fi
+        
+        echo "yes"
+        exit 0
+    else
+        dac_output_config_get "$1"
+        exit $?
+    fi
+elif [ $# -eq 2 ]; then
+    # set value
+    if [ $1 != "dsd-dop" ] && [ $1 != "pcm-sample-rate" ] && [ $1 != "pcm-bit-depth" ] && [ $1 != "dsd-format" ] && [ $1 != "default" ]; then
+        echo "m1-dac-output-conf set param error"
+        echo "supply \"m1-dac-output-conf dsd-dop yes(pcm)\""
+        echo "       \"m1-dac-output-conf pcm-sample-rate 384000(352800 192000 176400 96000 88200 48000 44100)\""
+        echo "       \"m1-dac-output-conf pcm-bit-depth 32(24 16)\""
+        echo "       \"m1-dac-output-conf dsd-format 128(64)\""
+        echo "       \"m1-dac-output-conf default yes\""
+        exit 1
+    fi
+
+    # default
+    if [ $1 == "default" ]; then
+        if [ $2 != "yes" ]; then
+            echo "m1-dac-output-conf set default value error"
+            echo "supply \"m1-dac-output-conf default yes\""
+            exit 1
+        fi
+
+        # Roon-Ready DSP volume ctl
+        roon_ready_dsp_volume_ctl=1
+        if [ -f /mnt/roon-ready/software ]; then
+            rm -rf /mnt/roon-ready/software
+            roon_ready_dsp_volume_ctl=0
+        fi
+
+        default_value=$(m1-dac-output-conf "default")
+        if [ $2 == $default_value ]; then
+
+            dac_volume_ctl="1"
+            model=$(m1-model)
+            if [ $model == "M1" ]; then 
+                dac_volume_ctl=$(m1-dac-volume-ctl)
+                if [ $dac_volume_ctl != "1" ]; then
+                    # set volume can ctl
+                    echo "1" > /mnt/settings/m1-dac-volume-ctl.conf
+                fi
+            fi
+
+            dac_use=$(m1-dac-use)
+            if [ $dac_use -eq 0 ]; then
+                if [ $roon_ready_dsp_volume_ctl -eq 0 ] || [ $dac_volume_ctl != "1" ]; then
+                    m1-roon-ready-conf >/dev/null 2>&1
+                    systemctl status roon-ready >/dev/null 2>&1
+                    if [ $? -eq 0 ]; then
+                        systemctl stop roon-ready >/dev/null 2>&1
+                        systemctl start roon-ready >/dev/null 2>&1
+                    fi
+                fi
+            fi
+            exit 0
+        else
+            dac_output_config_set "dsd-dop" "yes"
+            ret=$?
+            if [ $ret -ne 0 ]; then
+                exit $ret
+            fi
+            
+            dac_output_config_set "pcm-sample-rate" "384000"
+            ret=$?
+            if [ $ret -ne 0 ]; then
+                exit $ret
+            fi
+            
+            dac_output_config_set "pcm-bit-depth" "32"
+            ret=$?
+            if [ $ret -ne 0 ]; then
+                exit $ret
+            fi
+            
+            dac_output_config_set "dsd-format" "128"
+            ret=$?
+            if [ $ret -ne 0 ]; then
+                exit $ret
+            fi
+
+            # set volume can ctl
+            echo "1" > /mnt/settings/m1-dac-volume-ctl.conf
+            
+            dac_use=$(m1-dac-use)
+            if [ $dac_use -eq 0 ]; then
+                m1-dac-use m1
+            fi
+
+            exit 0
+        fi
+    fi
+
+    if [ $1 == "dsd-dop" ]; then
+        if [ $2 != "yes" ] && [ $2 != "pcm" ]; then
+            echo "m1-dac-output-conf set dsd-dop value error"
+            echo "supply \"m1-dac-output-conf dsd-dop yes(pcm)\""
+            exit 1
+        fi
+
+        dsd_dop=$(dac_output_config_get "dsd-dop")
+        if [ $2 == $dsd_dop ]; then
+            exit 0
+        fi
+    fi
+
+    if [ $1 == "pcm-sample-rate" ]; then
+        if [ $2 != "384000" ] && [ $2 != "352800" ] && [ $2 != "192000" ] && [ $2 != "176400" ] && [ $2 != "96000" ] && [ $2 != "88200" ] && [ $2 != "48000" ] && [ $2 != "44100" ]; then
+            echo "m1-dac-output-conf set pcm-sample-rate value error"
+            echo "supply \"m1-dac-output-conf pcm-sample-rate 384000(352800 192000 176400 96000 88200 48000 44100)\""
+            exit 1
+        fi
+
+        sample_rate=$(dac_output_config_get "pcm-sample-rate")
+        if [ $2 -eq $sample_rate ]; then
+            exit 0
+        fi
+    fi
+
+    if [ $1 == "pcm-bit-depth" ]; then
+        if [ $2 != "32" ] && [ $2 != "24" ] && [ $2 != "16" ]; then
+            echo "m1-dac-output-conf set pcm-bit-depth value error"
+            echo "supply \"m1-dac-output-conf pcm-bit-depth 32(24 16)\""
+            exit 1
+        fi
+
+        pcm_bit_depth=$(dac_output_config_get "pcm-bit-depth")
+        if [ $2 -eq $pcm_bit_depth ]; then
+            exit 0
+        fi
+    fi
+
+    if [ $1 == "dsd-format" ]; then
+        if [ $2 != "128" ] && [ $2 != "64" ]; then
+            echo "m1-dac-output-conf set dsd-format value error"
+            echo "supply \"m1-dac-output-conf dsd-format 128(64)\""
+            exit 1
+        fi
+
+        dsd_format=$(dac_output_config_get "dsd-format")
+        if [ $2 -eq $dsd_format ]; then
+            exit 0
+        fi
+    fi
+    
+    dac_output_config_set "$1" "$2"
+    ret=$?
+    if [ $ret -eq 0 ]; then
+        dac_use=$(m1-dac-use)
+        if [ $dac_use -eq 0 ]; then
+            m1-dac-use m1
+        fi
+    else
+        exit $ret
+    fi
+elif [ $# -eq 0 ]; then
+    # get config
+    dsd_dop=$(dac_output_config_get "dsd-dop")
+    sample_rate=$(dac_output_config_get "pcm-sample-rate")
+    bit_depth=$(dac_output_config_get "pcm-bit-depth")
+    dsd_format=$(dac_output_config_get "dsd-format")
+    allowed_formats=""
+
+    if [ $dsd_dop != "yes" ] && [ $dsd_dop != "pcm" ]; then
+        exit 1
+    fi
+
+    if [ $dsd_dop != "pcm" ]; then
+        case $dsd_format in
+         "64")
+             allowed_formats="dsd64:2=dop"
+         ;;
+         "128")
+             allowed_formats="dsd128:2=dop dsd64:2=dop"
+         ;;
+         *)
+             exit 1
+         ;;
+        esac
+    fi
+
+    if [ $bit_depth -ne "16" ] && [ $bit_depth -ne "24" ] && [ $bit_depth -ne "32" ]; then
+        exit 1
+    fi
+    
+    case $sample_rate in
+         "384000")
+             case $bit_depth in
+             "32")
+                 allowed_formats="384000:f:2 384000:32:2 384000:24:2 384000:16:2 352800:f:2 352800:32:2 352800:24:2 352800:16:2 192000:f:2 192000:32:2 192000:24:2 192000:16:2 176400:f:2 176400:32:2 176400:24:2 176400:16:2 96000:f:2 96000:32:2 96000:24:2 96000:16:2 88200:f:2 88200:32:2 88200:24:2 88200:16:2 48000:f:2 48000:32:2 48000:24:2 48000:16:2 44100:f:2 44100:32:2 44100:24:2 44100:16:2 "$allowed_formats
+             ;;
+             "24")
+                 allowed_formats="384000:24:2 384000:16:2 352800:24:2 352800:16:2 192000:24:2 192000:16:2 176400:24:2 176400:16:2 96000:24:2 96000:16:2 88200:24:2 88200:16:2 48000:24:2 48000:16:2 44100:24:2 44100:16:2 "$allowed_formats
+             ;;
+             "16")
+                 allowed_formats="384000:16:2 352800:16:2 192000:16:2 176400:16:2 96000:16:2 88200:16:2 48000:16:2 44100:16:2 "$allowed_formats
+             ;;
+             esac
+         ;;
+         "352800")
+             case $bit_depth in
+             "32")
+                 allowed_formats="352800:f:2 352800:32:2 352800:24:2 352800:16:2 192000:f:2 192000:32:2 192000:24:2 192000:16:2 176400:f:2 176400:32:2 176400:24:2 176400:16:2 96000:f:2 96000:32:2 96000:24:2 96000:16:2 88200:f:2 88200:32:2 88200:24:2 88200:16:2 48000:f:2 48000:32:2 48000:24:2 48000:16:2 44100:f:2 44100:32:2 44100:24:2 44100:16:2 "$allowed_formats
+             ;;
+             "24")
+                 allowed_formats="352800:24:2 352800:16:2 192000:24:2 192000:16:2 176400:24:2 176400:16:2 96000:24:2 96000:16:2 88200:24:2 88200:16:2 48000:24:2 48000:16:2 44100:24:2 44100:16:2 "$allowed_formats
+             ;;
+             "16")
+                 allowed_formats="352800:16:2 192000:16:2 176400:16:2 96000:16:2 88200:16:2 48000:16:2 44100:16:2 "$allowed_formats
+             ;;
+             esac
+         ;;
+         "192000")
+             case $bit_depth in
+             "32")
+                 allowed_formats="192000:f:2 192000:32:2 192000:24:2 192000:16:2 176400:f:2 176400:32:2 176400:24:2 176400:16:2 96000:f:2 96000:32:2 96000:24:2 96000:16:2 88200:f:2 88200:32:2 88200:24:2 88200:16:2 48000:f:2 48000:32:2 48000:24:2 48000:16:2 44100:f:2 44100:32:2 44100:24:2 44100:16:2 "$allowed_formats
+             ;;
+             "24")
+                 allowed_formats="192000:24:2 192000:16:2 176400:24:2 176400:16:2 96000:24:2 96000:16:2 88200:24:2 88200:16:2 48000:24:2 48000:16:2 44100:24:2 44100:16:2 "$allowed_formats
+             ;;
+             "16")
+                 allowed_formats="192000:16:2 176400:16:2 96000:16:2 88200:16:2 48000:16:2 44100:16:2 "$allowed_formats
+             ;;
+             esac
+         ;;
+         "176400")
+             case $bit_depth in
+             "32")
+                 allowed_formats="176400:f:2 176400:32:2 176400:24:2 176400:16:2 96000:f:2 96000:32:2 96000:24:2 96000:16:2 88200:f:2 88200:32:2 88200:24:2 88200:16:2 48000:f:2 48000:32:2 48000:24:2 48000:16:2 44100:f:2 44100:32:2 44100:24:2 44100:16:2 "$allowed_formats
+             ;;
+             "24")
+                 allowed_formats="176400:24:2 176400:16:2 96000:24:2 96000:16:2 88200:24:2 88200:16:2 48000:24:2 48000:16:2 44100:24:2 44100:16:2 "$allowed_formats
+             ;;
+             "16")
+                 allowed_formats="176400:16:2 96000:16:2 88200:16:2 48000:16:2 44100:16:2 "$allowed_formats
+             ;;
+             esac
+         ;;
+         "96000")
+             case $bit_depth in
+             "32")
+                 allowed_formats="96000:f:2 96000:32:2 96000:24:2 96000:16:2 88200:f:2 88200:32:2 88200:24:2 88200:16:2 48000:f:2 48000:32:2 48000:24:2 48000:16:2 44100:f:2 44100:32:2 44100:24:2 44100:16:2 "$allowed_formats
+             ;;
+             "24")
+                 allowed_formats="96000:24:2 96000:16:2 88200:24:2 88200:16:2 48000:24:2 48000:16:2 44100:24:2 44100:16:2 "$allowed_formats
+             ;;
+             "16")
+                 allowed_formats="96000:16:2 88200:16:2 48000:16:2 44100:16:2 "$allowed_formats
+             ;;
+             esac
+         ;;
+         "88200")
+             case $bit_depth in
+             "32")
+                 allowed_formats="88200:f:2 88200:32:2 88200:24:2 88200:16:2 48000:f:2 48000:32:2 48000:24:2 48000:16:2 44100:f:2 44100:32:2 44100:24:2 44100:16:2 "$allowed_formats
+             ;;
+             "24")
+                 allowed_formats="88200:24:2 88200:16:2 48000:24:2 48000:16:2 44100:24:2 44100:16:2 "$allowed_formats
+             ;;
+             "16")
+                 allowed_formats="88200:16:2 48000:16:2 44100:16:2 "$allowed_formats
+             ;;
+             esac
+         ;;
+         "48000")
+             case $bit_depth in
+             "32")
+                 allowed_formats="48000:f:2 48000:32:2 48000:24:2 48000:16:2 44100:f:2 44100:32:2 44100:24:2 44100:16:2 "$allowed_formats
+             ;;
+             "24")
+                 allowed_formats="48000:24:2 48000:16:2 44100:24:2 44100:16:2 "$allowed_formats
+             ;;
+             "16")
+                 allowed_formats="48000:16:2 44100:16:2 "$allowed_formats
+             ;;
+             esac
+         ;;
+         "44100")
+             case $bit_depth in
+             "32")
+                 allowed_formats="44100:f:2 44100:32:2 44100:24:2 44100:16:2 "$allowed_formats
+             ;;
+             "24")
+                 allowed_formats="44100:24:2 44100:16:2 "$allowed_formats
+             ;;
+             "16")
+                 allowed_formats="44100:16:2 "$allowed_formats
+             ;;
+             esac
+         ;;
+         *)
+             exit 1
+         ;;
+   esac
+
+   echo $allowed_formats
+else
+    exit 1
+fi

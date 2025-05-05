@@ -1,0 +1,56 @@
+
+if [ ! -d "/mnt/shairport-sync" ] ; then
+    mkdir "/mnt/shairport-sync"
+fi
+
+if [ ! -d "/mnt/shairport-sync/conf" ] ; then
+    mkdir "/mnt/shairport-sync/conf"
+fi
+
+if [ ! -f "/mnt/shairport-sync/conf/shairport-sync.conf" ] ; then 
+cat << EOF > /mnt/shairport-sync/conf/shairport-sync.conf
+general : 
+{
+  name = "";
+};
+sessioncontrol : 
+{
+};
+alsa : 
+{
+  output_device = "plughw:0";
+  mixer_device = "hw:0";
+  mixer_control_name = "PCM";
+};
+metadata : 
+{
+};
+EOF
+fi
+
+name=$(vitos_app_config -a shairport-sync)
+if [ -z $name ]; then
+    mac=$(cat /sys/class/net/eth0/address)
+    mac=${mac:9:8}
+    mac=${mac//:/}
+    mac=$(echo $mac| tr 'a-z' 'A-Z')
+
+    model=$(m1-model)
+
+    vitos_app_config -a shairport-sync -t name -v ${model}-${mac}
+fi
+
+cat /mnt/shairport-sync/conf/shairport-sync.conf | grep volume_control_profile
+if [ $? != 0 ]; then
+
+    dac=$(/usr/bin/m1-dac-use)
+    if [ $dac == 0 ]; then 
+        sed '4 i volume_control_profile = \"flat\";' -i /mnt/shairport-sync/conf/shairport-sync.conf
+    else
+        sed '4 i volume_control_profile = \"standard\";' -i /mnt/shairport-sync/conf/shairport-sync.conf
+    fi
+fi
+
+if [ ! -f "/mnt/shairport-sync/stop" ] ; then
+    systemctl start shairport-sync > /dev/null 2>&1
+fi

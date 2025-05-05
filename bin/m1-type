@@ -1,0 +1,18 @@
+
+model="M1"
+if [ -f /mnt/settings/m1-model.conf ]; then
+    model=$(cat /mnt/settings/m1-model.conf)
+fi
+
+revision=$(cat /proc/cpuinfo 2> /dev/null | grep Revision | awk '{print$3}')
+if [ $revision == "a03111" ]; then
+    echo -n $model"-1GB"
+elif [ $revision == "b03111" ]||[ $revision == "b03112" ]||[ $revision == "b03114" ]||[ $revision == "c03130" ]; then
+    echo -n $model"-2GB"
+elif [ $revision == "c03111" ]||[ $revision == "c03112" ]||[ $revision == "c03114" ]||[ $revision == "c03115" ]; then
+    echo -n $model"-4GB"
+elif [ $revision == "d03114" ]||[ $revision == "d03115" ]; then
+    echo -n $model"-8GB"
+else
+    echo -n $model
+fi

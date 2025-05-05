@@ -1,0 +1,6 @@
+#!/bin/sh
+
+# 开机时运行
+
+systemctl start vitos-external-storage-init
+systemctl start vitos-web-python.service

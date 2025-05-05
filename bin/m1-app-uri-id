@@ -1,0 +1,72 @@
+#!/bin/sh
+
+# Created by wannoo on 2021/7/25.
+# Copyright © 2021 Thunder Data Co. Ltd. All rights reserved.
+#############################################################
+
+
+# http://app-id.silentangel.audio/song-id
+# hra:		http://online.silentangel.audio/hra/
+# qobuz:	http://online.silentangel.audio/qobuz/
+
+# 通过歌曲ID获取最新的播放链接
+mode=99
+if [[ "${1}" =~ ^"http://online.silentangel.audio/hra/" ]]; then
+	py="/srv/py/hra_play.py"
+	id=$(echo ${1##*/})
+elif [[ "${1}" =~ ^"http://online.silentangel.audio/qobuz/" ]]; then
+	py="/srv/py/qobuz/qobuz_play.py"
+	id=$(echo ${1##*/})
+	mode=3
+elif [[ "${1}" =~ ^"http://online.silentangel.audio/tidal" ]]; then
+	py="/srv/py/tidal/airable_tidel.py"
+	id=$(echo ${1#*=})
+	mode=2
+elif [[ "${1}" =~ ^"http://online.silentangel.audio/amazon/station" ]]; then
+	py="/srv/py/amazon/airable_amazon.py"
+	id=$(echo ${1#*=})
+    mode=0
+elif [[ "${1}" =~ ^"http://online.silentangel.audio/amazon" ]]; then
+	py="/srv/py/amazon/airable_amazon.py"
+	id=$(echo ${1#*=})
+	mode=1
+elif [[ "${1}" =~ ^"http://online.silentangel.audio/tunein" ]]; then
+	py="/srv/py/tunein/tunein.py"
+	id=$(echo ${1#*=})
+elif [[ "${1}" =~ ^"http://online.silentangel.audio/qplay" ]]; then
+     id=$(echo ${1#*=})
+     py="/srv/py/qplay/qplay.py"
+fi
+
+if [[ -z "${py}" ]]; then	#链接不对
+	exit 1
+fi
+if [[ ! -e "${py}" ]]; then	#python文件不存在
+	exit 2
+fi
+
+if [[ -z ${id} ]]; then		#拿不到id
+	exit 3
+fi
+
+if [ $mode -eq 2 ]; then	#tidal
+    uri=$(curl "http://127.0.0.1:6599/python/tidal/track_url?track_id=${id}" 2>/dev/null)
+elif [ $mode -eq 3 ]; then	#qobuz
+    uri=$(curl "http://127.0.0.1:6599/python/qobuz/track_url?track_id=${id}" 2>/dev/null)
+elif [ $mode -eq 1 ]; then	#amazon
+    uri=$(curl "http://127.0.0.1:6599/python/amazon/track_url?track_id=${id}" 2>/dev/null)
+elif [ $mode -eq 0 ]; then	#amazon station
+    uri=$(python "${py}" "get_play_station_url" "track_id=${id}" 2>/dev/null)
+else
+    uri=$(python "${py}" "track_url" "track_id=${id}" 2>/dev/null)
+fi
+
+if [ $? -ne 0 ]; then # 拿不到播放地址
+     exit 4
+fi
+if [[ "${uri}" =~ ^"https://" ]] ||  [[ "${uri}" =~ ^"http://" ]]; then
+	echo -n "$uri"
+	exit 0
+fi
+
+exit 9

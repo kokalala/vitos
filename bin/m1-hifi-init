@@ -1,0 +1,104 @@
+#!/bin/sh
+
+function i2c_write() {
+	i2cset -f -y 1 $1 $2 $3
+	if [ $? != 0 ];then
+	    exit -1
+	fi
+}
+
+function i2c_ct5302_init() {
+    i2c_write 0x10 0x2b 0x08
+    sleep 0.05
+    i2c_write 0x10 0x2b 0x00
+    i2c_write 0x10 0x07 0x0B
+    i2c_write 0x10 0x09 0x00
+    i2c_write 0x10 0x0a 0x00
+    i2c_write 0x10 0x10 0x80
+    i2c_write 0x10 0x11 0x00
+    i2c_write 0x10 0x12 0x2F
+    i2c_write 0x10 0x13 0x00
+    i2c_write 0x10 0x14 0x40
+    i2c_write 0x10 0x30 0x23
+    i2c_write 0x10 0x31 0x19
+    i2c_write 0x10 0x32 0x1E
+    i2c_write 0x10 0x34 0x01
+    i2c_write 0x10 0x39 0xF3
+    i2c_write 0x10 0x3B 0xFF
+    i2c_write 0x10 0x40 0x02
+    i2c_write 0x10 0x45 0x00
+    i2c_write 0x10 0x47 0xA4
+    i2c_write 0x10 0x49 0x28
+    i2c_write 0x10 0x4D 0x06
+    i2c_write 0x10 0x4E 0x72
+    #i2c_write 0x10 0x59 0x00
+    i2c_write 0x10 0x5C 0x00
+    i2c_write 0x10 0x5D 0x00
+    i2c_write 0x10 0x5E 0x04
+    i2c_write 0x10 0x61 0x08
+    i2c_write 0x10 0x62 0x01
+    i2c_write 0x10 0x06 0x08
+    i2c_write 0x10 0x04 0x66
+}
+
+function i2c_es9018_init() {
+    sleep 0.05
+    i2c_write 0x48 0x01 0x84
+    i2c_write 0x48 0x0d 0x00
+    i2c_write 0x48 0x2a 0x40
+    sleep 0.5
+}
+
+# hifi-check
+for((i=1;i<=10;i++));
+do
+    m1-hifi-check > /dev/null 2>&1
+    if [ $? -ne 0 ]; then
+        rmmod snd_soc_rpi_simple_soundcard
+    	   rmmod snd_soc_bcm2835_i2s
+    	   sleep 1.0
+    	   modprobe snd_soc_bcm2835_i2s
+    	   modprobe snd_soc_rpi_simple_soundcard
+    	   sleep 1.0
+    else
+        break
+    fi
+done
+
+#DAC_RST
+if [ ! -d /sys/class/gpio/gpio23 ]; then
+    echo 23 > /sys/class/gpio/export
+    echo out > /sys/class/gpio/gpio23/direction
+    echo "Set gpio23 as output"
+fi
+
+#DSD_EN
+if [ ! -d /sys/class/gpio/gpio24 ]; then
+    echo 24 > /sys/class/gpio/export
+    echo out > /sys/class/gpio/gpio24/direction
+    echo "Set gpio24 as output"
+fi
+
+#AMUTE
+if [ ! -d /sys/class/gpio/gpio25 ]; then
+    echo 25 > /sys/class/gpio/export
+    echo out > /sys/class/gpio/gpio25/direction
+    echo "Set gpio25 as output"
+fi
+
+#AMUTE = 0 (RELAY OFF)
+echo 0 > /sys/class/gpio/gpio25/value
+#DAC_RST = 1 (DAC CHIP RESET)
+echo 1 > /sys/class/gpio/gpio23/value
+i2c_ct5302_init
+#DAC_RST = 0 (DAC CHIP RESET)
+echo 0 > /sys/class/gpio/gpio23/value
+i2c_es9018_init
+#AMUTE = 1 (RELAY ON)
+echo 1 > /sys/class/gpio/gpio25/value
+
+# setting volume
+if [ -f /mnt/settings/m1-hifi-volume.conf ]; then
+  volume=$(cat /mnt/settings/m1-hifi-volume.conf)
+  m1-hifi-volume $volume
+fi

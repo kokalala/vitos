@@ -1,0 +1,46 @@
+#!/bin/sh
+
+# Created by wannoo on 2021/7/25.
+# Copyright © 2021 Thunder Data Co. Ltd. All rights reserved.
+#############################################################
+
+
+# http://app-id.silentangel.audio/song-id
+# hra:		http://online.silentangel.audio/hra/
+# qobuz:	http://online.silentangel.audio/qobuz/
+
+# 通过歌曲ID获取最新的播放链接
+#echo ${1} >> /root/next.log
+mode=99
+if [[ "${1}" =~ ^"http://online.silentangel.audio/qobuz/" ]]; then
+	py="/srv/py/qobuz/qobuz_play.py"
+	id=$(echo ${1##*/})
+	mode=3
+elif [[ "${1}" =~ ^"http://online.silentangel.audio/tidal" ]]; then
+	py="/srv/py/tidal/airable_tidel.py"
+	id=$(echo ${1#*=})
+	mode=2
+elif [[ "${1}" =~ ^"http://online.silentangel.audio/amazon" ]]; then
+	py="/srv/py/amazon/airable_amazon.py"
+	id=$(echo ${1#*=})
+	mode=1
+fi
+
+if [[ -z "${py}" ]]; then	#链接不对
+	exit 1
+fi
+if [[ ! -e "${py}" ]]; then	#python文件不存在
+	exit 2
+fi
+
+if [[ -z ${id} ]]; then		#拿不到id
+	exit 3
+fi
+
+if [ $mode -eq 2 ]; then	#tidal
+    curl "http://127.0.0.1:6599/python/tidal/track_url?track_id=${id}" 2>/dev/null &
+elif [ $mode -eq 3 ]; then	#qobuz
+    curl "http://127.0.0.1:6599/python/qobuz/track_url?track_id=${id}" 2>/dev/null &
+elif [ $mode -eq 1 ]; then	#amazon
+    curl "http://127.0.0.1:6599/python/amazon/track_url?track_id=${id}" 2>/dev/null &
+fi

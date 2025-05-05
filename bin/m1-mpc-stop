@@ -1,0 +1,3 @@
+
+mpc stop > /dev/null &
+#mpc pause-if-playing > /dev/null &

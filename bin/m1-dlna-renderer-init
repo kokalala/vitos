@@ -1,0 +1,30 @@
+
+name=$(cat "/mnt/upmpdcli/upmpdcli.conf" | grep ^"friendlyname = "| grep -Po 'friendlyname [=] +\K[^,]+')
+if [ $? -ne 0 ]; then
+    mac=$(cat /sys/class/net/eth0/address)
+    mac=${mac:9:8}
+    mac=${mac//:/}
+    mac=$(echo $mac| tr 'a-z' 'A-Z')
+
+    model=$(m1-model)
+
+    sed -i "/^friendlyname/cfriendlyname = ${model}-${mac}" /mnt/upmpdcli/upmpdcli.conf
+fi
+
+systemctl stop upmpdcli > /dev/null 2>&1
+
+if [ ! -f "/mnt/upmpdcli/stop" ] ; then
+    systemctl status upmpdcli > /dev/null 2>&1
+    if [ $? -ne 0 ]; then
+        for((i=1;i<=15;i++));
+        do
+            systemctl start upmpdcli > /dev/null 2>&1
+            systemctl status upmpdcli > /dev/null 2>&1
+            if [ $? -eq 0 ]; then
+                break
+            else
+                sleep 1
+            fi
+        done
+    fi
+fi

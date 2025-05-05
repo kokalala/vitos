@@ -1,0 +1,5 @@
+
+mpc | grep "^\[playing"
+if [ $? -eq 0 ]; then
+    mpc next
+fi

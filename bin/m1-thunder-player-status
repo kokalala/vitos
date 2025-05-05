@@ -1,0 +1,6 @@
+
+#date >> /root/m1-thunder-player-status.log
+#echo $@ >> /root/m1-thunder-player-status.log
+#echo "" >> /root/m1-thunder-player-status.log
+
+echo $@ > /mnt/settings/m1-thunder-player-status.log

@@ -1,0 +1,26 @@
+
+if [ ! -d "/mnt/spotify-connect" ] ; then
+    mkdir "/mnt/spotify-connect"
+fi
+
+if [ ! -f "/mnt/spotify-connect/vit_spotify-connect.cfg" ] ; then 
+cat << EOF > /mnt/spotify-connect/vit_spotify-connect.cfg 
+name = "";
+deviceIndex = 0;
+EOF
+fi
+
+name=$(vitos_app_config -a spotify-connect)
+if [ -z $name ]; then
+    mac=$(cat /sys/class/net/eth0/address)
+    mac=${mac:9:8}
+    mac=${mac//:/}
+    mac=$(echo $mac| tr 'a-z' 'A-Z')
+
+    model=$(m1-model)
+    vitos_app_config -a spotify-connect -t name -v ${model}-${mac}
+fi
+
+if [ ! -f "/mnt/spotify-connect/stop" ] ; then
+    systemctl start spotify-connect > /dev/null 2>&1
+fi

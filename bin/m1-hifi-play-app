@@ -1,0 +1,88 @@
+#!/bin/sh
+
+app=$(cat /mnt/settings/m1-dac-use-app.conf)
+if [ $1 == $app ]; then
+    exit 0
+fi
+
+#echo $1 > /mnt/settings/m1-dac-use-app.conf
+
+if [ $1 == "mpd" ]; then
+    if [ -f /mnt/settings/radio-shoutcast-play ]; then
+        echo "radio-shoutcast-play"
+    else
+        echo $1 > /mnt/settings/m1-dac-use-app.conf
+    fi
+else
+    echo $1 > /mnt/settings/m1-dac-use-app.conf
+fi
+
+if [ $app == "roon-ready" ]; then
+    systemctl status roon-ready >/dev/null 2>&1
+    if [ $? -eq 0 ]; then
+#        systemctl stop roon-ready
+#        systemctl start roon-ready
+#        sleep 1
+
+        mac=$(cat /sys/class/net/eth0/address)
+        mac=${mac//:/-}
+        mac=$(echo $mac| tr 'a-z' 'A-Z')
+        model=$(m1-model)
+        unique_id="SILENTANGEL-${model}-${mac}"
+        raatool teardown $unique_id
+        
+    fi
+elif [ $app == "spotify-connect" ]; then
+    systemctl status spotify-connect >/dev/null 2>&1
+    if [ $? -eq 0 ]; then
+        systemctl stop spotify-connect
+        systemctl start spotify-connect
+    fi
+elif [ $app == "mpd" ] && [ $1 != "radio-shoutcast" ]; then
+#    mpc pause-if-playing
+#    mpc stop
+    mpc pause-if-playing; mpc seek 0
+    sleep 1
+elif [ $app == "shairport-sync" ]; then
+    systemctl status shairport-sync >/dev/null 2>&1
+    if [ $? -eq 0 ]; then
+        systemctl stop shairport-sync
+        systemctl start shairport-sync
+
+#        dbus-send --system --print-reply --type=method_call --dest=org.gnome.ShairportSync '/org/gnome/ShairportSync' org.gnome.ShairportSync.RemoteControl.Pause
+#        if [ $? -eq 0 ]; then
+#             sleep 1
+#        else
+#             systemctl stop shairport-sync
+#             systemctl start shairport-sync
+#        fi
+
+#        dbus-send --system --print-reply --type=method_call --dest=org.gnome.ShairportSync '/org/gnome/ShairportSync' org.gnome.ShairportSync.RemoteControl.Pause
+#        if [ $? -eq 0 ]; then
+#             sleep 1
+#             app=$(cat /mnt/settings/m1-dac-use-app.conf)
+#             if [ $1 != $app ]; then
+#                 echo $app $1
+#                 m1-hifi-play-app $1
+#             else
+#                 while [ -f /tmp/m1-hifi-mode ]
+#                 do
+#                     sleep 0.5
+#                 done
+#             fi
+#        else
+#             systemctl stop shairport-sync
+#             systemctl start shairport-sync
+#        fi
+    fi
+elif [ $app == "radio-shoutcast" ] && [ $1 != "mpd" ]; then
+#    mpc pause-if-playing
+#    mpc stop
+    mpc pause-if-playing; mpc seek 0
+    sleep 1
+fi
+
+if [ $1 != "mpd" ]; then
+    m1-filter-set fast > /dev/null &
+    mpc idlesend
+fi

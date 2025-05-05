@@ -1,0 +1,96 @@
+#!/bin/sh
+
+a="$1"
+path=${a%/*}
+name=${a##*/}
+if echo "$name" | grep -q -E '\.cue.GB18030.cue$'
+then
+     if [[ "$name" =~ ^.* ]]; then
+	     name=${name#*.}
+	     name=${name%%.GB18030.cue*}
+	     if [ -f "/mnt/mpd/music/$1" ]; then
+	         if [ -f "/mnt/mpd/music/$path/$name" ]; then
+	             time_z=`stat -c %Y "/mnt/mpd/music/$1"`
+	             time_org=`stat -c %Y "/mnt/mpd/music/$path/$name"`
+	             if [ $time_org -gt $time_z ]; then
+	                 z_array=("GB18030" "GB2312" "GBK" "GB13000" "GB" "GB_1988-80" "GB_198880")
+	                 for ((i = 0; i < 7; i ++))
+	                 do
+	                     iconv -f ${z_array[$i]} -t UTF-8 "/mnt/mpd/music/$path/$name"
+	                     if [ $? -eq 0 ]; then
+	                         iconv -f ${z_array[$i]} -t UTF-8 "/mnt/mpd/music/$path/$name" > "/mnt/mpd/music/$1"
+	                         break;
+	                     fi
+	                 done
+	             fi
+	         fi
+          elif [ -f "/mnt/mpd/music/$path/$name" ]; then
+              z_array=("GB18030" "GB2312" "GBK" "GB13000" "GB" "GB_1988-80" "GB_198880")
+	         for ((i = 0; i < 7; i ++))
+	         do
+	             iconv -f ${z_array[$i]} -t UTF-8 "/mnt/mpd/music/$path/$name"
+	             if [ $? -eq 0 ]; then
+	                 iconv -f ${z_array[$i]} -t UTF-8 "/mnt/mpd/music/$path/$name" > "/mnt/mpd/music/$1"
+	                 break;
+	             fi
+	         done
+          fi
+     fi
+elif echo "$name" | grep -q -E '\.cue.SHIFT-JIS.cue$'
+then
+     if [[ "$name" =~ ^.* ]]; then
+	     name=${name#*.}
+	     name=${name%%.SHIFT-JIS.cue*}
+	     if [ -f "/mnt/mpd/music/$1" ]; then
+	         if [ -f "/mnt/mpd/music/$path/$name" ]; then
+	             time_z=`stat -c %Y "/mnt/mpd/music/$1"`
+	             time_org=`stat -c %Y "/mnt/mpd/music/$path/$name"`
+	             if [ $time_org -gt $time_z ]; then
+	                 j_array=("SHIFTJISX0213" "SHIFT_JISX0213" "SHIFT-JIS" "SHIFT_JIS" "SJIS" "SJIS-OPEN" "SJIS-WIN")
+	                 for ((i = 0; i < 7; i ++))
+	                 do
+	                     iconv -f ${j_array[$i]} -t UTF-8 "/mnt/mpd/music/$path/$name"
+	                     if [ $? -eq 0 ]; then
+	                         iconv -f ${j_array[$i]} -t UTF-8 "/mnt/mpd/music/$path/$name" > "/mnt/mpd/music/$1"
+	                         break;
+	                     fi
+	                 done
+	             fi
+	         fi
+          elif [ -f "/mnt/mpd/music/$path/$name" ]; then
+	         j_array=("SHIFTJISX0213" "SHIFT_JISX0213" "SHIFT-JIS" "SHIFT_JIS" "SJIS" "SJIS-OPEN" "SJIS-WIN")
+	         for ((i = 0; i < 7; i ++))
+	         do
+	             iconv -f ${j_array[$i]} -t UTF-8 "/mnt/mpd/music/$path/$name"
+	             if [ $? -eq 0 ]; then
+	                 iconv -f ${j_array[$i]} -t UTF-8 "/mnt/mpd/music/$path/$name" > "/mnt/mpd/music/$1"
+	                 break;
+	             fi
+	         done
+          fi
+     fi
+elif echo "$name" | grep -q -E '\.cue.BIG5.cue$'
+then
+     if [[ "$name" =~ ^.* ]]; then
+	     name=${name#*.}
+	     name=${name%%.BIG5.cue*}
+	     if [ -f "/mnt/mpd/music/$1" ]; then
+	         if [ -f "/mnt/mpd/music/$path/$name" ]; then
+	             time_z=`stat -c %Y "/mnt/mpd/music/$1"`
+	             time_org=`stat -c %Y "/mnt/mpd/music/$path/$name"`
+	             if [ $time_org -gt $time_z ]; then
+	                 iconv -f BIG5 -t UTF-8 "/mnt/mpd/music/$path/$name"
+	                 if [ $? -eq 0 ]; then
+	                     iconv -f BIG5 -t UTF-8 "/mnt/mpd/music/$path/$name" > "/mnt/mpd/music/$1"
+	                 fi
+	             fi
+	         fi
+          elif [ -f "/mnt/mpd/music/$path/$name" ]; then
+	         iconv -f BIG5 -t UTF-8 "/mnt/mpd/music/$path/$name"
+	         if [ $? -eq 0 ]; then
+	             iconv -f BIG5 -t UTF-8 "/mnt/mpd/music/$path/$name" > "/mnt/mpd/music/$1"
+	         fi
+          fi
+     fi
+fi
+

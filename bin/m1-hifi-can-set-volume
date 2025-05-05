@@ -1,0 +1,59 @@
+#!/bin/sh
+
+function vitos_usb_dac_volume_ctl(){
+
+	dac_index=$(cat /proc/asound/cards 2>/dev/null | grep USB-Audio | grep ']:' | sed -n '1p' | awk '{print $1}')		#获取最早插入的usb dac
+	if [[ ! -e "/proc/asound/card${dac_index}/usbid" ]]; then
+		return 1
+	fi
+
+	local name_all=$(cat /proc/asound/cards 2> /dev/null | grep ^" ${dac_index}"  -A 1 )
+	local name=$(echo "${name_all}" | sed -n '1p'| cut -d "-"  -f 3- | sed 's/^[ \t]*//g')
+	if [[ ${name} != "Q serial" ]]; then
+         return 0
+	fi
+	
+	local serial=$(ls -l /dev/snd/by-id/ | grep "../controlC${dac_index}"$ | awk '{print $9}' | cut -d "-" -f2 )
+	if [[ "$serial" =~ ^DA_T_AUDIO_Q_serial_* ]]; then
+        return 1
+     fi
+
+	return 0
+}
+
+if [ -f /mnt/settings/m1-dac-used.conf ]; then 
+
+    used=$(cat /mnt/settings/m1-dac-used.conf 2>/dev/null)
+    if [ $? -eq 0 ]; then
+        if [ $used == "0" ]; then
+             ctl=$(cat /mnt/settings/m1-dac-volume-ctl.conf 2>/dev/null)
+             if [ $? -eq 0 ] && [ $ctl == "0" ]; then
+                 echo "0"
+             else
+                 echo "1"
+             fi
+        else
+             ctl=$(cat /mnt/settings/m1-usb-dac-volume-ctl.conf 2>/dev/null)
+             if [ $? -eq 0 ] && [ $ctl == "0" ]; then
+                 echo "0"
+             else
+                 vitos_usb_dac_volume_ctl
+                 rtn=$?
+                 if [ $rtn -eq 0 ]; then
+                     echo "2"
+                 else
+                     echo "0"
+                 fi
+             fi
+        fi
+    fi
+else
+    ctl=$(cat /mnt/settings/m1-dac-volume-ctl.conf 2>/dev/null)
+    if [ $? -eq 0 ] && [ $ctl == "0" ]; then
+        echo "0"
+        exit 0
+    fi
+    echo "1"
+fi
+
+

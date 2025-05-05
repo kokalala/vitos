@@ -1,0 +1,12 @@
+#echo -n 1
+
+if [ $# -eq 1 ]; then
+    echo -n $1 > /mnt/settings/m1-mqa-level.conf
+elif [ $# -eq 0 ]; then
+    model="0"
+    if [ -f /mnt/settings/m1-mqa-level.conf ]; then
+        model=$(cat /mnt/settings/m1-mqa-level.conf)
+    fi
+    echo -n $model
+fi
+

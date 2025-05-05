@@ -1,0 +1,161 @@
+
+function use_m1_dac_conf() {
+
+null_buffer_time=$(m1-dac-null-buffer)
+null_buffer_time_conf=""
+if [ $null_buffer_time -eq 0 ]; then
+    null_buffer_time_conf=""
+else
+    null_buffer_time_conf="      null_buffer_time    \"$null_buffer_time\""
+fi
+
+allowed_formats_conf=""
+allowed_formats=$(m1-dac-output-conf)
+if [ $? -ne 0 ]; then
+    allowed_formats_conf=""
+else
+    allowed_formats_conf="      allowed_formats    \"$allowed_formats\""
+fi
+
+cat << EOF > /mnt/mpd/mpd.conf
+
+music_directory "/mnt/mpd/music"
+pid_file        "/mnt/mpd/mpd.pid"
+db_file         "/mnt/mpd/mpd.db"
+state_file      "/mnt/mpd/mpdstate"
+log_file		 "/mnt/mpd/log/log"
+playlist_directory "/mnt/mpd/playlists"
+
+restore_paused "yes"
+auto_update	"yes"
+auto_update_depth "2"
+
+audio_buffer_size      "8192" 
+max_output_buffer_size "8192"
+
+audio_output {
+      type   "alsa"
+      name   "M1"
+      device "hw:0"
+      dop    "yes"
+$null_buffer_time_conf
+$allowed_formats_conf
+}
+
+EOF
+}
+
+function use_usb_dac_conf() {
+
+result=$(cat /proc/asound/cards 2>/dev/null | grep USB-Audio | grep ']:' | awk '{print $1}')
+if [[ -z ${result} ]]; then
+
+cat << EOF > /mnt/mpd/mpd.conf
+
+music_directory "/mnt/mpd/music"
+pid_file        "/mnt/mpd/mpd.pid"
+db_file         "/mnt/mpd/mpd.db"
+state_file      "/mnt/mpd/mpdstate"
+log_file		 "/mnt/mpd/log/log"
+playlist_directory "/mnt/mpd/playlists"
+
+restore_paused "yes"
+auto_update	"yes"
+auto_update_depth "2"
+
+audio_buffer_size      "8192" 
+max_output_buffer_size "8192"
+
+audio_output {
+      type		"null"
+	 name		"M1 Null Output"
+}
+
+EOF
+     return 1
+fi
+
+OLD_IFS="$IFS"
+IFS=" "
+array=($result)
+IFS="$OLD_IFS"
+audio_device_timestamp=0
+for var in ${array[*]}
+do
+    timestamp=$(date +%s -d "`stat /proc/asound/card$var | grep 'Modify:' | sed 's/Modify: //g'`")
+    if [[ 0 -eq $audio_device_timestamp ]]; then
+        audio_device_timestamp=$timestamp
+        audio_device_pcm_name=$var
+    elif [[ $timestamp -lt $audio_device_timestamp ]]; then
+        audio_device_timestamp=$timestamp
+        audio_device_pcm_name=$var
+    fi
+done
+
+null_buffer_time=$(m1-usb-dac-null-buffer)
+null_buffer_time_conf=""
+if [ $null_buffer_time -eq 0 ]; then
+    null_buffer_time_conf=""
+else
+    null_buffer_time_conf="      null_buffer_time    \"$null_buffer_time\""
+fi
+
+allowed_formats_conf=""
+allowed_formats=$(m1-usb-dac-output-conf)
+if [ $? -ne 0 ]; then
+    allowed_formats_conf=""
+else
+    allowed_formats_conf="      allowed_formats    \"$allowed_formats\""
+fi
+
+cat << EOF > /mnt/mpd/mpd.conf
+
+music_directory "/mnt/mpd/music"
+pid_file        "/mnt/mpd/mpd.pid"
+db_file         "/mnt/mpd/mpd.db"
+state_file      "/mnt/mpd/mpdstate"
+log_file		 "/mnt/mpd/log/log"
+playlist_directory "/mnt/mpd/playlists"
+
+restore_paused "yes"
+auto_update	"yes"
+auto_update_depth "2"
+
+audio_buffer_size      "8192" 
+max_output_buffer_size "8192"
+
+audio_output {
+      type         "alsa"
+      name         "M1-USB-DAC"
+      device       "hw:$audio_device_pcm_name"
+      mixer_device "hw:$audio_device_pcm_name"
+$null_buffer_time_conf
+$allowed_formats_conf
+}
+
+EOF
+
+}
+
+dac_type=$(m1-dac-use)
+if [ $dac_type -eq 0 ]; then
+    # M1-DAC
+    pcm_bit_depth=$(m1-dac-output-conf pcm-bit-depth)
+    if [ $pcm_bit_depth == "32" ]; then
+        cat /mnt/mpd/mpd.conf | grep "44100:f:2" > /dev/null
+        if [ $? -ne 0 ]; then
+            # old config, modify to new config
+            use_m1_dac_conf
+        fi
+    fi
+else
+    # USB-DAC
+    pcm_bit_depth=$(m1-usb-dac-output-conf pcm-bit-depth)
+    if [ $pcm_bit_depth == "32" ]; then
+        cat /mnt/mpd/mpd.conf | grep "44100:f:2" > /dev/null
+        if [ $? -ne 0 ]; then
+            # old config, modify to new config
+            use_usb_dac_conf
+        fi
+    fi
+fi

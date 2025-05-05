@@ -1,0 +1,161 @@
+#!/bin/sh
+
+function i2c_write() {
+    i2cset -f -y 1 $1 $2 $3
+    if [ $? != 0 ]; then
+        exit -1
+    fi
+}
+
+if [ $# -eq 1 ]; then
+    i2c_write 0x48 0x0f $1
+    i2c_write 0x48 0x10 $1
+    if [ $1 == "0xff" ]; then
+        echo "timer" > /sys/class/leds/led_mute/trigger && echo "2000" > /sys/class/leds/led_mute/delay_on && echo "2000" > /sys/class/leds/led_mute/delay_off
+    else
+        echo "none" > /sys/class/leds/led_mute/trigger
+    fi
+    echo $1 > /mnt/settings/m1-hifi-volume.conf
+
+    if [ $1 == "0xff" ]; then
+         dbus-send --system --print-reply --type=method_call --dest=org.gnome.ShairportSync '/org/gnome/ShairportSync' org.gnome.ShairportSync.RemoteControl.SetAirplayVolume double:-144.0
+    elif [ $1 == "0x00" ]; then
+         dbus-send --system --print-reply --type=method_call --dest=org.gnome.ShairportSync '/org/gnome/ShairportSync' org.gnome.ShairportSync.RemoteControl.SetAirplayVolume double:0.0
+    else 
+         ((num=$1))
+         ((num1=0x95))
+         ((num2=0x7d))
+         ((num3=0x64))
+         ((num4=0x50))
+         if [ $num -ge $num1 ]; then
+             volume=1
+         elif [ $num -ge $num2 ]; then
+             volume=$[1 + ($num1 - $num) / 6]
+         elif [ $num -ge $num3 ]; then
+             volume=$[5 + ($num2 - $num) / 5]
+         elif [ $num -ge $num4 ]; then
+             volume=$[10 + ($num3 - $num) / 2]
+         else
+             volume=$[20 + $num4 - $num]
+         fi
+
+vol[99]="-0.150000"
+vol[98]="-0.450000"
+vol[97]="-0.750000"
+vol[96]="-1.050000"
+vol[95]="-1.350000"
+vol[94]="-1.650000"
+vol[93]="-1.950000"
+vol[92]="-2.250000"
+vol[91]="-2.550000"
+vol[90]="-2.850000"
+vol[89]="-3.150000"
+vol[88]="-3.450000"
+vol[87]="-3.750000"
+vol[86]="-4.050000"
+vol[85]="-4.350000"
+vol[84]="-4.650000"
+vol[83]="-4.950000"
+vol[82]="-5.250000"
+vol[81]="-5.550000"
+vol[80]="-5.850000"
+vol[79]="-6.150000"
+vol[78]="-6.450000"
+vol[77]="-6.750000"
+vol[76]="-7.050000"
+vol[75]="-7.350000"
+vol[74]="-7.650000"
+vol[73]="-7.950000"
+vol[72]="-8.250000"
+vol[71]="-8.550000"
+vol[70]="-8.850000"
+vol[69]="-9.150000"
+vol[68]="-9.450000"
+vol[67]="-9.750000"
+vol[66]="-10.050000"
+vol[65]="-10.350000"
+vol[64]="-10.650001"
+vol[63]="-10.950001"
+vol[62]="-11.250001"
+vol[61]="-11.550001"
+vol[60]="-11.850001"
+vol[59]="-12.150001"
+vol[58]="-12.450001"
+vol[57]="-12.750001"
+vol[56]="-13.050001"
+vol[55]="-13.350001"
+vol[54]="-13.650001"
+vol[53]="-13.950001"
+vol[52]="-14.250001"
+vol[51]="-14.550001"
+vol[50]="-14.850001"
+vol[49]="-15.150001"
+vol[48]="-15.450001"
+vol[47]="-15.750001"
+vol[46]="-16.050001"
+vol[45]="-16.350001"
+vol[44]="-16.650001"
+vol[43]="-16.950001"
+vol[42]="-17.250001"
+vol[41]="-17.550001"
+vol[40]="-17.850001"
+vol[39]="-18.150001"
+vol[38]="-18.450001"
+vol[37]="-18.750001"
+vol[36]="-19.050001"
+vol[35]="-19.350001"
+vol[34]="-19.650001"
+vol[33]="-19.950001"
+vol[32]="-20.250001"
+vol[31]="-20.550001"
+vol[30]="-20.850001"
+vol[29]="-21.150001"
+vol[28]="-21.450001"
+vol[27]="-21.750001"
+vol[26]="-22.050001"
+vol[25]="-22.350001"
+vol[24]="-22.650001"
+vol[23]="-22.950001"
+vol[22]="-23.250001"
+vol[21]="-23.550001"
+vol[20]="-23.850001"
+vol[19]="-24.150001"
+vol[18]="-24.450001"
+vol[17]="-24.750001"
+vol[16]="-25.050001"
+vol[15]="-25.350001"
+vol[14]="-25.650001"
+vol[13]="-25.950001"
+vol[12]="-26.250001"
+vol[11]="-26.550001"
+vol[10]="-26.850001"
+vol[9]="-27.150001"
+vol[8]="-27.450001"
+vol[7]="-27.750001"
+vol[6]="-28.050001"
+vol[5]="-28.350001"
+vol[4]="-28.650001"
+vol[3]="-28.950001"
+vol[2]="-29.250001"
+vol[1]="-29.550001"
+
+         dbus-send --system --print-reply --type=method_call --dest=org.gnome.ShairportSync '/org/gnome/ShairportSync' org.gnome.ShairportSync.RemoteControl.SetAirplayVolume double:${vol[$volume]}
+         
+    fi
+    
+elif [ $# -eq 2 ]; then
+    i2c_write 0x48 0x0f $1
+    i2c_write 0x48 0x10 $1
+    if [ $1 == "0xff" ]; then
+        echo "timer" > /sys/class/leds/led_mute/trigger && echo "2000" > /sys/class/leds/led_mute/delay_on && echo "2000" > /sys/class/leds/led_mute/delay_off
+    else
+        echo "none" > /sys/class/leds/led_mute/trigger
+    fi
+    echo $1 > /mnt/settings/m1-hifi-volume.conf
+
+    if [ $2 == 2 ]; then
+        exit 0
+    fi
+else
+    i2cget -f -y 1 0x48 0x0f
+fi

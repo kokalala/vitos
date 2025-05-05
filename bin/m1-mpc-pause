@@ -1,0 +1,2 @@
+
+mpc pause-if-playing > /dev/null &

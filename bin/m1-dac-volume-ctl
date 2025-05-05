@@ -1,0 +1,27 @@
+#!/bin/sh
+
+# 0 can not set dac volume
+# 1 can set dac volume
+
+if [ $# -eq 1 ]; then
+     mode=$1
+     echo $1 > /mnt/settings/m1-dac-volume-ctl.conf
+     m1-hifi-volume 0x00
+
+     dac_use=$(m1-dac-use)
+     if [ $dac_use -eq 0 ]; then
+          m1-roon-ready-conf >/dev/null 2>&1
+          systemctl status roon-ready >/dev/null 2>&1
+          if [ $? -eq 0 ]; then
+               systemctl stop roon-ready >/dev/null 2>&1
+               systemctl start roon-ready >/dev/null 2>&1
+          fi
+     fi
+else
+     mode=$(cat /mnt/settings/m1-dac-volume-ctl.conf)
+     if [ -z $mode ]; then
+          mode="1"
+     fi
+
+     echo $mode
+fi

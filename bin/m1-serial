@@ -1,0 +1,9 @@
+serial=$(cat /mnt/settings/serial_number 2>/dev/null)
+if [[ -z ${serial} ]]; then
+     model="M1"
+     if [ -f /mnt/settings/m1-model.conf ]; then
+         model=$(cat /mnt/settings/m1-model.conf)
+     fi
+	serial="${model}-$(cat /sys/class/net/eth0/address 2> /dev/null| sed 's/:/-/g'| tr 'a-z' 'A-Z')"
+fi
+echo -n "${serial}"

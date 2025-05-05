@@ -1,0 +1,19 @@
+#!/bin/sh
+
+if [ ! -f /mnt/settings/m1-dac-use-app.conf ]; then
+    echo 0
+    exit 0
+fi
+
+app=$(cat /mnt/settings/m1-dac-use-app.conf)
+if [ "spotify-connect" == $app ]; then
+    echo 1
+elif [ "shairport-sync" == $app ]; then
+    echo 2
+elif [ "roon-ready" == $app ]; then
+    echo 3
+elif [ "radio-shoutcast" == $app ]; then
+    echo 4
+else
+    echo 0
+fi

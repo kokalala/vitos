@@ -1,0 +1,152 @@
+#!/bin/sh
+
+if [ $# -eq 2 ]; then
+     volume=$1
+     dac_volume_path="/mnt/settings/m1-usb-dac-volume.conf"
+     dac_use_path="/mnt/settings/m1-usb-dac-use.conf"
+     dac_use=$(cat ${dac_use_path})
+     if [ -z $dac_use ]; then
+          exit 1
+     else
+          echo "${dac_use}: ${volume}" > $dac_volume_path
+     fi
+elif [ $# -eq 1 ]; then
+     volume=$1
+     dac_volume_path="/mnt/settings/m1-usb-dac-volume.conf"
+     dac_use_path="/mnt/settings/m1-usb-dac-use.conf"
+     dac_use=$(cat ${dac_use_path})
+     if [ -z $dac_use ]; then
+          exit 1
+     else
+          echo "${dac_use}: ${volume}" > $dac_volume_path
+#          dbus-send --system --print-reply --type=method_call --dest=org.gnome.ShairportSync '/org/gnome/ShairportSync' org.gnome.ShairportSync.AdvancedRemoteControl.SetVolume int32:$volume
+#          exit 0
+
+vol[99]="-0.594000"
+vol[98]="-1.194000"
+vol[97]="-1.794000"
+vol[96]="-2.394000"
+vol[95]="-2.994000"
+vol[94]="-3.594000"
+vol[93]="-4.194000"
+vol[92]="-4.794000"
+vol[91]="-5.394000"
+vol[90]="-5.994000"
+vol[89]="-6.594000"
+vol[88]="-7.194000"
+vol[87]="-7.794000"
+vol[86]="-8.394000"
+vol[85]="-8.994000"
+vol[84]="-9.594000"
+vol[83]="-10.194000"
+vol[82]="-10.794001"
+vol[81]="-11.330001"
+vol[80]="-11.664001"
+vol[79]="-11.997001"
+vol[78]="-12.330001"
+vol[77]="-12.664001"
+vol[76]="-12.997001"
+vol[75]="-13.330001"
+vol[74]="-13.664001"
+vol[73]="-13.997001"
+vol[72]="-14.330001"
+vol[71]="-14.664001"
+vol[70]="-14.997001"
+vol[69]="-15.330001"
+vol[68]="-15.664001"
+vol[67]="-15.997001"
+vol[66]="-16.330001"
+vol[65]="-16.664001"
+vol[64]="-16.997001"
+vol[63]="-17.330001"
+vol[62]="-17.664001"
+vol[61]="-17.997001"
+vol[60]="-18.330001"
+vol[59]="-18.664001"
+vol[58]="-18.997001"
+vol[57]="-19.330001"
+vol[56]="-19.664001"
+vol[55]="-19.997001"
+vol[54]="-20.330001"
+vol[53]="-20.664001"
+vol[52]="-20.997001"
+vol[51]="-21.330001"
+vol[50]="-21.664001"
+vol[49]="-21.997001"
+vol[48]="-22.330001"
+vol[47]="-22.664001"
+vol[46]="-22.997001"
+vol[45]="-23.330001"
+vol[44]="-23.664001"
+vol[43]="-23.997001"
+vol[42]="-24.330001"
+vol[41]="-24.664001"
+vol[40]="-24.799001"
+vol[39]="-24.929001"
+vol[38]="-25.059001"
+vol[37]="-25.189001"
+vol[36]="-25.319001"
+vol[35]="-25.449001"
+vol[34]="-25.579001"
+vol[33]="-25.709001"
+vol[32]="-25.839001"
+vol[31]="-25.969001"
+vol[30]="-26.099001"
+vol[29]="-26.229001"
+vol[28]="-26.359001"
+vol[27]="-26.489001"
+vol[26]="-26.619001"
+vol[25]="-26.749001"
+vol[24]="-26.879001"
+vol[23]="-27.009001"
+vol[22]="-27.139001"
+vol[21]="-27.269001"
+vol[20]="-27.399001"
+vol[19]="-27.529001"
+vol[18]="-27.659001"
+vol[17]="-27.789001"
+vol[16]="-27.919001"
+vol[15]="-28.049001"
+vol[14]="-28.179001"
+vol[13]="-28.309001"
+vol[12]="-28.439001"
+vol[11]="-28.569001"
+vol[10]="-28.699001"
+vol[9]="-28.829001"
+vol[8]="-28.959001"
+vol[7]="-29.089001"
+vol[6]="-29.219001"
+vol[5]="-29.349001"
+vol[4]="-29.479001"
+vol[3]="-29.609001"
+vol[2]="-29.739001"
+vol[1]="-29.869001"
+vol[0]="-144.0"
+
+    if [ $volume == "0" ]; then
+         dbus-send --system --print-reply --type=method_call --dest=org.gnome.ShairportSync '/org/gnome/ShairportSync' org.gnome.ShairportSync.RemoteControl.SetAirplayVolume double:-144.0
+    elif [ $volume == "100" ]; then
+         dbus-send --system --print-reply --type=method_call --dest=org.gnome.ShairportSync '/org/gnome/ShairportSync' org.gnome.ShairportSync.RemoteControl.SetAirplayVolume double:0.0
+    else 
+         dbus-send --system --print-reply --type=method_call --dest=org.gnome.ShairportSync '/org/gnome/ShairportSync' org.gnome.ShairportSync.RemoteControl.SetAirplayVolume double:${vol[$volume]}
+    fi
+
+    fi
+else
+     if [ -f /mnt/settings/m1-usb-dac-volume.conf ]; then
+         dac_use_path="/mnt/settings/m1-usb-dac-use.conf"
+         dac_use=$(cat ${dac_use_path})
+         if [ -z $dac_use ]; then
+              volume="20"
+         else
+              dac_volume_path="/mnt/settings/m1-usb-dac-volume.conf"
+              volume=$(cat ${dac_volume_path} | grep "^${dac_use}:" | awk '{print$2}')
+              if [ -z $volume ]; then
+                   volume="20"
+              fi
+         fi
+         echo ${volume}
+     else
+         echo 20
+     fi
+fi

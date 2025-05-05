@@ -1,0 +1,14 @@
+
+#model=$(cat /proc/cpuinfo 2> /dev/null | grep Model | awk -F ": " '{print$2}')
+#if [ $? -eq 0 ]; then
+#    echo -n $model
+#else
+#    echo -n ""
+#fi
+
+model="M1"
+if [ -f /mnt/settings/m1-model.conf ]; then
+    model=$(cat /mnt/settings/m1-model.conf)
+fi
+
+echo -n $model

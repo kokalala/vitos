@@ -1,0 +1,97 @@
+#!/bin/sh
+
+function i2c_write() {
+    i2cset -f -y 1 $1 $2 $3
+    if [ $? != 0 ]; then
+        exit -1
+    fi
+}
+
+if [ $1 == "CLOSE" ]; then
+    rm -rf /tmp/m1-hifi-mode
+    echo "0" > /sys/class/leds/led_dsd/brightness
+    echo "0" > /sys/class/leds/led_pcm/brightness
+
+    exit 0
+fi
+
+if [ $# -lt 2 ]; then
+    echo "Error ! Need 2 parameters!"
+    echo "  Usage: $0    PCM-or-DSD<PCM/DSD>    SAMPLE-RATE<44100/48000/88200/96000/176400/192000/352800/384000>"
+    echo "Example: $0    PCM 44100"
+    echo "Example: $0    DSD 1"
+    exit 1
+fi
+
+PCMDSD=$1
+SAMPLERATE=$2
+
+date=$(date)
+echo "$date m1-hifi-play $1 $2" >> /mnt/debug.log
+
+if [ $PCMDSD == "PCM" ]; then
+    case $SAMPLERATE in
+	   "44100")
+	       SAMP=0x30
+	       ;;
+	   "48000")
+	       SAMP=0x32
+	       ;;
+	   "88200")
+	       SAMP=0x38
+	       ;;
+	   "96000")
+	       SAMP=0x3a
+	       ;;
+	   "176400")
+	       SAMP=0x3c
+	       ;;
+	   "192000")
+	       SAMP=0x3e
+	       ;;
+	   "352800")
+	       SAMP=0x01
+	       ;;
+	   "384000")
+	       SAMP=0x01
+	       ;;
+	   *)
+	       echo "Unsupport sample rate: $SAMPLERATE !"
+	       exit 1
+	       ;;
+    esac
+
+    if [ -f /tmp/m1-hifi-mode ]; then
+        mode=$(cat /tmp/m1-hifi-mode | grep "mode" | grep "^mode:"  | awk '{print$2}')
+        sample=$(cat /tmp/m1-hifi-mode | grep "sample" | grep "^sample:"  | awk '{print$2}')
+        if [ $mode == "pcm" ]&&[ $sample == $SAMPLERATE ]; then
+            exit 1
+        fi
+    fi
+
+    echo "mode: pcm" > /tmp/m1-hifi-mode
+    echo "sample: $SAMPLERATE" >> /tmp/m1-hifi-mode
+    
+    echo "0" > /sys/class/leds/led_dsd/brightness
+    echo "255" > /sys/class/leds/led_pcm/brightness
+    i2c_write 0x10 0x59 0x00
+    # PCM , GPIO : DSD_EN = 0 
+    echo 0 > /sys/class/gpio/gpio24/value
+    i2c_write 0x10 0x0e $SAMP
+else
+    if [ -f /tmp/m1-hifi-mode ]; then
+        mode=$(cat /tmp/m1-hifi-mode | grep "mode" | grep "^mode:"  | awk '{print$2}')
+        if [ $mode == "dsd" ]; then
+            exit 1
+        fi
+    fi
+    
+    echo "mode: dsd" > /tmp/m1-hifi-mode
+    
+    echo "255" > /sys/class/leds/led_dsd/brightness
+    echo "0" > /sys/class/leds/led_pcm/brightness
+    i2c_write 0x10 0x59 0x30
+    #DSD, GPIO : DSD_EN = 1
+    echo 1 > /sys/class/gpio/gpio24/value
+    i2c_write 0x10 0x0e 0x01
+fi

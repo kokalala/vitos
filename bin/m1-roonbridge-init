@@ -1,0 +1,16 @@
+
+if ! id -u roon >/dev/null 2>&1; then
+   useradd roon
+fi
+
+chown -R roon:roon /opt/RoonBridge
+
+if [ ! -d "/mnt/roonbridge" ] ; then
+    mkdir "/mnt/roonbridge"
+fi
+
+chown -R roon:roon /mnt/roonbridge
+
+if [ ! -f "/mnt/roonbridge/stop" ] ; then
+    systemctl start roonbridge > /dev/null 2>&1
+fi

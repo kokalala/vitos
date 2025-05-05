@@ -1,0 +1,50 @@
+#!/bin/sh
+
+if [[ $1 == http://* ]]; then
+ exit 1
+fi
+
+if [[ $1 == https://* ]]; then
+ exit 1
+fi
+
+a="$1"
+if [ -h "$a" ]; then
+   b=`ls -ld "$a"`
+   dir=$(echo "${b}" | awk -F " " '{for (i=9;i<=NF;i++)printf("%s ", $i);print ""}' | sed 's| $||')
+   length=${#1}
+   length=$[length+"4"]
+   a=${dir:$length}
+fi
+path=$a
+
+cd "$path" 2>/dev/null
+if [ $? -ne 0 ]; then
+    exit 1
+fi
+
+list=$(find . -maxdepth 1 -iname cover.tiff -type f -o -iname cover.bmp -type f -o -iname cover.png -type f  -o -iname cover.jpeg -type f -o -iname cover.jpg -type f 2>/dev/null)
+if [ $? -eq 0 ] && [ -n "$list" ]; then
+    list=${list//$path\//}
+    file=$(echo "$list" | sed -n '1p')
+    echo -n $file
+    exit 0
+fi
+
+list=$(find . -maxdepth 1 -name ".*" -prune -o -iname "*.tiff" -type f -print -o -iname "*.bmp" -type f -print -o -iname "*.png" -type f -print -o -iname "*.jpeg" -type f -print -o -iname "*.jpg" -type f -print 2>/dev/null)
+if [ $? -eq 0 ] && [ -n "$list" ]; then
+    list=${list//$path\//}
+    file=$(echo "$list" | sed -n '1p')
+    echo -n $file
+    exit 0
+fi
+
+list=$(find . -maxdepth 1 -name -o -iname "*.tiff" -type f -o -iname "*.bmp" -type f -o -iname "*.png" -type f -o -iname "*.jpeg" -type f -o -iname "*.jpg" -type f 2>/dev/null)
+if [ $? -eq 0 ] && [ -n "$list" ]; then
+    list=${list//$path\//}
+    file=$(echo "$list" | sed -n '1p')
+    echo -n $file
+    exit 0
+fi
+
+exit 1

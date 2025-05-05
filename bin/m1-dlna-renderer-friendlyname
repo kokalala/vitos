@@ -1,0 +1,31 @@
+
+function display_name_get(){
+	name=$(cat "/mnt/upmpdcli/upmpdcli.conf" | grep ^"friendlyname = "| grep -Po 'friendlyname [=] +\K[^,]+')
+	ret=$?
+	echo $name
+	return $ret
+}
+
+function display_name_set(){
+
+	sed -i "/^friendlyname/cfriendlyname = ${1}" /mnt/upmpdcli/upmpdcli.conf
+	ret=$?
+	if [ $ret -ne 0 ]; then
+	    return $ret
+	fi
+
+	if [ ! -f "/mnt/upmpdcli/stop" ] ; then
+         systemctl restart upmpdcli
+         return $?
+     else 
+         return $ret
+     fi
+}
+
+if [ $# -eq 1 ]; then
+    display_name_set "$1"
+    exit $?
+else
+    display_name_get
+    exit $?
+fi

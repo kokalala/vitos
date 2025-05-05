@@ -1,0 +1,331 @@
+#!/bin/sh
+
+# 0 m1-dac
+# 1 usb-dac
+
+function use_m1_dac() {
+
+# 0: not support mqa, 1: mqa only decoder, 2: mqa decoder and renderer
+# mqa only decoder for M1-DAC
+echo "1" > "/mnt/settings/m1-mqa-level.conf"
+
+null_buffer_time=$(m1-dac-null-buffer)
+null_buffer_time_conf=""
+if [ $null_buffer_time -eq 0 ]; then
+    null_buffer_time_conf=""
+else
+    null_buffer_time_conf="      null_buffer_time    \"$null_buffer_time\""
+fi
+
+allowed_formats_conf=""
+allowed_formats=$(m1-dac-output-conf)
+if [ $? -ne 0 ]; then
+    allowed_formats_conf=""
+else
+    allowed_formats_conf="      allowed_formats    \"$allowed_formats\""
+fi
+
+cat << EOF > /mnt/mpd/mpd.conf
+
+music_directory "/mnt/mpd/music"
+pid_file        "/mnt/mpd/mpd.pid"
+db_file         "/mnt/mpd/mpd.db"
+state_file      "/mnt/mpd/mpdstate"
+log_file		 "/mnt/mpd/log/log"
+playlist_directory "/mnt/mpd/playlists"
+
+restore_paused "yes"
+auto_update	"yes"
+auto_update_depth "2"
+
+audio_buffer_size      "8192" 
+max_output_buffer_size "8192"
+
+audio_output {
+      type   "alsa"
+      name   "M1"
+      device "hw:0"
+      dop    "yes"
+$null_buffer_time_conf
+$allowed_formats_conf
+}
+
+EOF
+
+vitos_app_config -a shairport-sync -t device -v "plughw:0"
+vitos_app_config -a shairport-sync -t mixer_device -v "hw:0"
+vitos_app_config -a shairport-sync -t volume_control_profile -v flat
+
+
+vitos_app_config -a spotify-connect -t device -v 0
+
+m1-roon-ready-conf
+
+}
+
+function vitos_usb_dac_id() {
+
+	dac_index=$1
+	
+	local name_all=$(cat /proc/asound/cards | grep ^" ${dac_index}"  -A 1 )
+	local name=$(echo "${name_all}" | sed -n '1p'| cut -d "-"  -f 3- | sed 's/^[ \t]*//g')
+
+	local usbid=$(cat /proc/asound/card${dac_index}/usbid)
+	local usbid_arr=(${usbid/:/ })
+	local vendor_id=${usbid_arr[0]}
+	local product_id=${usbid_arr[1]}
+
+	local vendor_hwdb=$(grep -i ^"usb:v${vendor_id}\*" -A 1 "/lib/udev/hwdb.d/20-usb-vendor-model.hwdb")
+	if [[ -z ${vendor_hwdb} ]]; then
+		local name_full=$(echo "${name_all}" | sed -n '2p' | sed 's/^[ \t]*//g')
+		vendor_name=$(echo "${name_full%${name}*}" | sed 's/[ \t]*$//g')
+	else
+		vendor_name=$(echo ${vendor_hwdb#*ID_VENDOR_FROM_DATABASE=})
+	fi
+	if [[ -z ${vendor_name} ]]; then
+		vendor_name=$(echo ${name} | awk '{print $1}')
+	fi
+
+	local serial=$(ls -l /dev/snd/by-id/ | grep "../controlC${dac_index}"$ | awk '{print $9}' | cut -d "-" -f2 )
+
+	name=${name// /-}
+	vendor_name=${vendor_name// /-}
+	vendor_id=${vendor_id// /-}
+	product_id=${product_id// /-}
+	serial=${serial// /-}
+
+	vit_serial=${vendor_name}"__"${name}"__"${vendor_id}"__"${product_id}"__"${serial}
+     echo ${vit_serial} > /mnt/settings/m1-usb-dac-use.conf
+}
+
+function use_usb_dac() {
+
+result=$(cat /proc/asound/cards 2>/dev/null | grep USB-Audio | grep ']:' | awk '{print $1}')
+if [[ -z ${result} ]]; then
+
+# 0: not support mqa, 1: mqa only decoder, 2: mqa decoder and renderer
+# mqa only decoder for M1-DAC
+echo "1" > "/mnt/settings/m1-mqa-level.conf"
+
+cat << EOF > /mnt/mpd/mpd.conf
+
+music_directory "/mnt/mpd/music"
+pid_file        "/mnt/mpd/mpd.pid"
+db_file         "/mnt/mpd/mpd.db"
+state_file      "/mnt/mpd/mpdstate"
+log_file		 "/mnt/mpd/log/log"
+playlist_directory "/mnt/mpd/playlists"
+
+restore_paused "yes"
+auto_update	"yes"
+auto_update_depth "2"
+
+audio_buffer_size      "8192" 
+max_output_buffer_size "8192"
+
+audio_output {
+      type		"null"
+	 name		"M1 Null Output"
+}
+
+EOF
+
+     m1-roon-ready-usb-conf
+     
+     return 1
+fi
+
+OLD_IFS="$IFS"
+IFS=" "
+array=($result)
+IFS="$OLD_IFS"
+audio_device_timestamp=0
+for var in ${array[*]}
+do
+    timestamp=$(date +%s -d "`stat /proc/asound/card$var | grep 'Modify:' | sed 's/Modify: //g'`")
+    if [[ 0 -eq $audio_device_timestamp ]]; then
+        audio_device_timestamp=$timestamp
+        audio_device_pcm_name=$var
+    elif [[ $timestamp -lt $audio_device_timestamp ]]; then
+        audio_device_timestamp=$timestamp
+        audio_device_pcm_name=$var
+    fi
+done
+
+usbid=$(cat /proc/asound/card${audio_device_pcm_name}/usbid)
+usbid_arr=(${usbid/:/ })
+vendor_id=${usbid_arr[0]}
+product_id=${usbid_arr[1]}
+mqa_mode=$(check_dac_mqa_level ${vendor_id} ${product_id})
+# 0: not support mqa, 1: mqa only decoder, 2: mqa decoder and renderer
+if [ $mqa_mode == "MQADecoder" ]; then
+    echo "0" > "/mnt/settings/m1-mqa-level.conf"
+else
+    echo "1" > "/mnt/settings/m1-mqa-level.conf"
+fi
+
+#grep "hw:$audio_device_pcm_name" /mnt/mpd/mpd.conf > /dev/null
+#if [ $? -eq 0 ]&&[ $# -eq 0 ] ; then 
+#    return 2
+#fi
+
+vitos_usb_dac_id $audio_device_pcm_name
+
+
+null_buffer_time=$(m1-usb-dac-null-buffer)
+null_buffer_time_conf=""
+if [ $null_buffer_time -eq 0 ]; then
+    null_buffer_time_conf=""
+else
+    null_buffer_time_conf="      null_buffer_time    \"$null_buffer_time\""
+fi
+
+allowed_formats_conf=""
+allowed_formats=$(m1-usb-dac-output-conf)
+if [ $? -ne 0 ]; then
+    allowed_formats_conf=""
+else
+    allowed_formats_conf="      allowed_formats    \"$allowed_formats\""
+fi
+
+cat << EOF > /mnt/mpd/mpd.conf
+
+music_directory "/mnt/mpd/music"
+pid_file        "/mnt/mpd/mpd.pid"
+db_file         "/mnt/mpd/mpd.db"
+state_file      "/mnt/mpd/mpdstate"
+log_file		 "/mnt/mpd/log/log"
+playlist_directory "/mnt/mpd/playlists"
+
+restore_paused "yes"
+auto_update	"yes"
+auto_update_depth "2"
+
+audio_buffer_size      "8192" 
+max_output_buffer_size "8192"
+
+audio_output {
+      type         "alsa"
+      name         "M1-USB-DAC"
+      device       "hw:$audio_device_pcm_name"
+      mixer_device "hw:$audio_device_pcm_name"
+$null_buffer_time_conf
+$allowed_formats_conf
+}
+
+EOF
+
+vitos_app_config -a shairport-sync -t device -v "plughw:$audio_device_pcm_name"
+vitos_app_config -a shairport-sync -t mixer_device -v "hw:$audio_device_pcm_name"
+vitos_app_config -a shairport-sync -t volume_control_profile -v standard
+
+vitos_app_config -a spotify-connect -t device -v $audio_device_pcm_name
+
+m1-roon-ready-usb-conf
+
+}
+
+if [ $# -eq 2 ] && [ $2 == "conf" ] || [ $# -eq 1 ] ; then
+     mode=$1
+     app=""
+     if [ -f /mnt/settings/m1-dac-use-app.conf ]; then
+         app=$(cat /mnt/settings/m1-dac-use-app.conf)
+     fi
+
+     mpc | grep "^\[playing"
+     status=$?
+     if [ $mode == "m1" ]; then
+          echo "0" > /mnt/settings/m1-dac-used.conf
+          use_m1_dac
+
+          systemctl status spotify-connect >/dev/null 2>&1
+          if [ $? -eq 0 ]; then
+              systemctl stop spotify-connect
+              systemctl start spotify-connect
+          fi
+
+          systemctl status shairport-sync >/dev/null 2>&1
+          if [ $? -eq 0 ]; then
+              systemctl stop shairport-sync
+              systemctl start shairport-sync
+          fi
+
+          systemctl status roon-ready >/dev/null 2>&1
+          if [ $? -eq 0 ]; then
+              systemctl stop roon-ready
+              systemctl start roon-ready
+          fi
+
+          systemctl status mpd >/dev/null 2>&1
+          if [ $? -eq 0 ]; then
+               systemctl stop mpd.socket
+               systemctl stop mpd
+
+               systemctl start mpd.socket
+               systemctl start mpd
+
+               if [ $status -eq 0 ]; then
+                    mpc pause
+               fi
+
+               m1-dlna-renderer-init
+          fi
+     else
+          echo "1" > /mnt/settings/m1-dac-used.conf
+          if [ $# -eq 2 ]&&[ $2 == "conf" ]; then
+              use_usb_dac "conf"
+          else 
+              use_usb_dac
+          fi
+          have_usb=$?
+          if [ $have_usb -eq 2 ] ; then
+              exit 0
+          fi
+
+          systemctl status spotify-connect >/dev/null 2>&1
+          if [ $? -eq 0 ]; then
+              systemctl stop spotify-connect
+              systemctl start spotify-connect
+          fi
+
+          systemctl status shairport-sync >/dev/null 2>&1
+          if [ $? -eq 0 ]; then
+              systemctl stop shairport-sync
+              systemctl start shairport-sync
+          fi
+
+          systemctl status roon-ready >/dev/null 2>&1
+          if [ $? -eq 0 ]; then
+              systemctl stop roon-ready
+              systemctl start roon-ready
+          fi
+
+          systemctl status mpd >/dev/null 2>&1
+          if [ $? -eq 0 ]; then
+               systemctl stop mpd.socket
+               systemctl stop mpd
+
+               systemctl start mpd.socket
+               systemctl start mpd
+
+               if [ $status -eq 0 ]&&[ $have_usb -eq 0 ]; then
+                    mpc pause
+               fi
+
+               m1-dlna-renderer-init
+          fi
+     fi
+     
+     if [ $app"x" == "radio-shoutcast""x" ]; then
+         echo $app > /mnt/settings/m1-dac-use-app.conf
+         mpc idlesend
+     fi
+     
+else
+     mode=$(cat /mnt/settings/m1-dac-used.conf 2>/dev/null)
+     if [ -z $mode ]; then
+          mode="0"
+     fi
+
+     echo $mode
+fi

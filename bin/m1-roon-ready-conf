@@ -1,0 +1,218 @@
+#!/bin/sh
+
+# model
+model=$(m1-model)
+
+# unique_id
+mac=$(cat /sys/class/net/eth0/address)
+mac=${mac//:/-}
+mac=$(echo $mac| tr 'a-z' 'A-Z')
+unique_id="SILENTANGEL-${model}-${mac}"
+
+# serial
+if [ -f /mnt/settings/serial_number ]; then
+    serial=$(cat /mnt/settings/serial_number)
+else
+    serial=$unique_id
+fi
+
+# version
+version=$(thunder_version | awk -v FS="-" '{print $2}')
+version="VitOS-"$version
+
+# output
+
+# volume_type
+if [ -f /mnt/roon-ready/software ]; then
+    volume_type="software"
+else
+    volume_type="dummy"
+fi
+
+# dsd_mode
+dsd_dop=$(m1-dac-output-conf dsd-dop)
+if [ $dsd_dop == "yes" ]; then
+    dsd_mode="dop"
+else
+    dsd_mode="none"
+fi
+
+# 0 can not set dac volume
+# 1 can set dac volume
+dac_volume_ctl=$(m1-dac-volume-ctl)
+if [ $dac_volume_ctl == "1" ] || [ $volume_type == "software" ]; then
+cat << EOF > /mnt/roon-ready/raat.conf
+{
+    "volume": { 
+        "type":   "$volume_type",
+	   "device": "hw:0"
+    },
+EOF
+else
+cat << EOF > /mnt/roon-ready/raat.conf
+{
+EOF
+fi
+
+cat << EOF >> /mnt/roon-ready/raat.conf
+    "vendor":    "Silent Angel",
+    "model":     "$model",
+    "version":   "$version",
+    "serial":    "$serial",
+    "unique_id": "$unique_id",
+    "output": { 
+        "type":     "alsa", 
+        "device":   "hw:0",
+        "dsd_mode": "$dsd_mode",
+        "disable_usb_hw_info":       true,
+        "skip_startup_device_check": true,
+        "signal_path":     [ 
+            { "quality": "lossless", "type": "output", "method": "analog_digital" }
+        ],
+        "supported_formats": [
+EOF
+
+# supported_formats
+if [ $volume_type == "dummy" ]; then
+if [ $dsd_dop == "yes" ]; then
+    dsd_format=$(m1-dac-output-conf dsd-format)
+    if [ $dsd_format == "64" ]; then
+cat << EOF >> /mnt/roon-ready/raat.conf
+            { "sample_type": "dsd", "sample_rate": 2822400, "bits_per_sample": 1, "channels": 1 },
+            { "sample_type": "dsd", "sample_rate": 2822400, "bits_per_sample": 1, "channels": 2 },
+EOF
+    elif [ $dsd_format == "128" ]; then
+cat << EOF >> /mnt/roon-ready/raat.conf
+            { "sample_type": "dsd", "sample_rate": 2822400, "bits_per_sample": 1, "channels": 1 },
+            { "sample_type": "dsd", "sample_rate": 2822400, "bits_per_sample": 1, "channels": 2 },
+            { "sample_type": "dsd", "sample_rate": 5644800, "bits_per_sample": 1, "channels": 1 },
+            { "sample_type": "dsd", "sample_rate": 5644800, "bits_per_sample": 1, "channels": 2 },
+EOF
+    fi
+fi
+fi
+
+function supported_format_end() {
+     case $2 in
+          "32")
+cat << EOF >> /mnt/roon-ready/raat.conf
+            { "sample_type": "pcm", "sample_rate": $1, "bits_per_sample": 16, "channels": 1 },
+            { "sample_type": "pcm", "sample_rate": $1, "bits_per_sample": 24, "channels": 1 },
+            { "sample_type": "pcm", "sample_rate": $1, "bits_per_sample": 32, "channels": 1 },
+            { "sample_type": "pcm", "sample_rate": $1, "bits_per_sample": 16, "channels": 2 },
+            { "sample_type": "pcm", "sample_rate": $1, "bits_per_sample": 24, "channels": 2 },
+            { "sample_type": "pcm", "sample_rate": $1, "bits_per_sample": 32, "channels": 2 }
+        ]
+    }
+}
+EOF
+          ;;
+          "24")
+cat << EOF >> /mnt/roon-ready/raat.conf
+            { "sample_type": "pcm", "sample_rate": $1, "bits_per_sample": 16, "channels": 1 },
+            { "sample_type": "pcm", "sample_rate": $1, "bits_per_sample": 24, "channels": 1 },
+            { "sample_type": "pcm", "sample_rate": $1, "bits_per_sample": 16, "channels": 2 },
+            { "sample_type": "pcm", "sample_rate": $1, "bits_per_sample": 24, "channels": 2 }
+        ]
+    }
+}
+EOF
+          ;;
+          "16")
+cat << EOF >> /mnt/roon-ready/raat.conf
+            { "sample_type": "pcm", "sample_rate": $1, "bits_per_sample": 16, "channels": 1 },
+            { "sample_type": "pcm", "sample_rate": $1, "bits_per_sample": 16, "channels": 2 }
+        ]
+    }
+}
+EOF
+          ;;
+     esac
+}
+
+function supported_format() {
+     case $2 in
+          "32")
+cat << EOF >> /mnt/roon-ready/raat.conf
+            { "sample_type": "pcm", "sample_rate": $1, "bits_per_sample": 16, "channels": 1 },
+            { "sample_type": "pcm", "sample_rate": $1, "bits_per_sample": 24, "channels": 1 },
+            { "sample_type": "pcm", "sample_rate": $1, "bits_per_sample": 32, "channels": 1 },
+            { "sample_type": "pcm", "sample_rate": $1, "bits_per_sample": 16, "channels": 2 },
+            { "sample_type": "pcm", "sample_rate": $1, "bits_per_sample": 24, "channels": 2 },
+            { "sample_type": "pcm", "sample_rate": $1, "bits_per_sample": 32, "channels": 2 },
+EOF
+          ;;
+          "24")
+cat << EOF >> /mnt/roon-ready/raat.conf
+            { "sample_type": "pcm", "sample_rate": $1, "bits_per_sample": 16, "channels": 1 },
+            { "sample_type": "pcm", "sample_rate": $1, "bits_per_sample": 24, "channels": 1 },
+            { "sample_type": "pcm", "sample_rate": $1, "bits_per_sample": 16, "channels": 2 },
+            { "sample_type": "pcm", "sample_rate": $1, "bits_per_sample": 24, "channels": 2 },
+EOF
+          ;;
+          "16")
+cat << EOF >> /mnt/roon-ready/raat.conf
+            { "sample_type": "pcm", "sample_rate": $1, "bits_per_sample": 16, "channels": 1 },
+            { "sample_type": "pcm", "sample_rate": $1, "bits_per_sample": 16, "channels": 2 },
+EOF
+          ;;
+     esac
+}
+
+# sample_type
+sample_rate=$(m1-dac-output-conf pcm-sample-rate)
+bit_depth=$(m1-dac-output-conf pcm-bit-depth)
+
+# 44100
+if [ $sample_rate -eq 44100 ]; then
+     supported_format_end 44100 $bit_depth
+else
+     supported_format 44100 $bit_depth
+fi
+
+# 48000
+if [ $sample_rate -gt 48000 ]; then
+     supported_format 48000 $bit_depth
+elif [ $sample_rate -eq 48000 ]; then
+     supported_format_end 48000 $bit_depth
+fi
+
+# 88200
+if [ $sample_rate -gt 88200 ]; then
+     supported_format 88200 $bit_depth
+elif [ $sample_rate -eq 88200 ]; then
+     supported_format_end 88200 $bit_depth
+fi
+
+# 96000
+if [ $sample_rate -gt 96000 ]; then
+     supported_format 96000 $bit_depth
+elif [ $sample_rate -eq 96000 ]; then
+     supported_format_end 96000 $bit_depth
+fi
+
+# 176400
+if [ $sample_rate -gt 176400 ]; then
+     supported_format 176400 $bit_depth
+elif [ $sample_rate -eq 176400 ]; then
+     supported_format_end 176400 $bit_depth
+fi
+
+# 192000
+if [ $sample_rate -gt 192000 ]; then
+     supported_format 192000 $bit_depth
+elif [ $sample_rate -eq 192000 ]; then
+     supported_format_end 192000 $bit_depth
+fi
+
+# 352800
+if [ $sample_rate -gt 352800 ]; then
+     supported_format 352800 $bit_depth
+elif [ $sample_rate -eq 352800 ]; then
+     supported_format_end 352800 $bit_depth
+fi
+
+# 384000
+if [ $sample_rate -eq 384000 ]; then
+     supported_format_end 384000 $bit_depth
+fi

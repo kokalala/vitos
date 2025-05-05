@@ -1,0 +1,27 @@
+#!/bin/sh
+
+dac_mode=$(m1-dac-use)
+if [ $dac_mode -ne 0 ]; then
+    exit 0
+fi
+
+if [ $1 == "slow" ]; then
+    # filter settings- slow roll off
+    register_7_val=$(i2cget -f -y 1 0x48 0x07)
+    register_7_set=$(($register_7_val & 0x20))
+    if [ $register_7_set -ne 32 ]; then
+        register_7_set=$(($register_7_val & 0x9F))
+        register_7_set=$(($register_7_val | 0x20))
+        register_7_set=`echo "obase=16; $register_7_set" |bc`
+        i2cset -f -y 1 0x48 0x07 "0x${register_7_set}"
+    fi
+elif [ $1 == "fast" ]; then
+    # filter settings- fast roll off
+    register_7_val=$(i2cget -f -y 1 0x48 0x07)
+    register_7_set=$(($register_7_val | 0x9F))
+    if [ $register_7_set -ne 159 ]; then
+        register_7_set=$(($register_7_val & 0x9F))
+        register_7_set=`echo "obase=16; $register_7_set" |bc`
+        i2cset -f -y 1 0x48 0x07 "0x${register_7_set}"
+    fi
+fi

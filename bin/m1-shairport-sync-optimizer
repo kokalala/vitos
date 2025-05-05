@@ -1,0 +1,22 @@
+
+# 0 shariport-sync optimizer yes
+# 1 shariport-sync optimizer no
+
+if [ $# -eq 1 ]; then
+    mode=$1
+    grep "period_size" "/mnt/shairport-sync/conf/shairport-sync.conf" > /dev/null
+    retust=$?
+    if [ $retust -ne 0 ] && [ $mode -eq 0 ] ; then
+        sed -i "13 i  period_size = 3072;\nbuffer_size = 3072;" /mnt/shairport-sync/conf/shairport-sync.conf
+    elif [ $retust -eq 0 ] && [ $mode -eq 1 ] ; then
+        sed -i '13,14d' /mnt/shairport-sync/conf/shairport-sync.conf
+    fi
+    sync
+else
+    grep "period_size" "/mnt/shairport-sync/conf/shairport-sync.conf" > /dev/null
+    if [ $? -eq 0 ] ; then
+        echo "0"
+    else
+        echo "1"
+    fi
+fi

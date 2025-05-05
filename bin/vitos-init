@@ -1,0 +1,225 @@
+#!/bin/sh
+################################################################################
+# 1. mount /dev/mmcblk0p3 /
+################################################################################
+
+mount /dev/mmcblk0p3 /mnt
+
+################################################################################
+# 2. Host name set
+################################################################################
+mac=$(cat /sys/class/net/eth0/address)
+mac=${mac//:/}
+mac=${mac^^}
+mac=${mac:0-6:6}
+
+model=$(m1-model)
+mac="${model}-${mac}"
+
+file_node_name="/mnt/settings/hostname"
+if [[ -f $file_node_name ]]; then
+    nodename=$(cat $file_node_name)
+    if [ $? -eq 0 ]; then
+        hostnamectl set-hostname ${nodename}
+    else
+        hostnamectl set-hostname ${mac}
+        echo -n "$mac" > $file_node_name
+    fi
+else
+    hostnamectl set-hostname ${mac}
+    echo -n "$mac" > $file_node_name
+fi
+
+################################################################################
+# 3. start dhcpcd
+################################################################################
+if [ -f "/mnt/settings/dhcpcd.conf" ] ; then
+    cp /mnt/settings/dhcpcd.conf /etc/dhcpcd.conf
+fi
+
+systemctl start dhcpcd
+
+################################################################################
+# 4. set timezone
+################################################################################
+if [ -f "/mnt/settings/time_ctl_mode.conf" ] ; then
+    mode=$(cat /mnt/settings/time_ctl_mode.conf)
+    if [[ "enable" = ${mode} ]]; then
+        timedatectl set-ntp true
+    else
+        timedatectl set-ntp false
+    fi
+else
+    timedatectl set-ntp true
+fi
+
+if [ -f "/mnt/settings/time_ctl_timezone.conf" ] ; then
+    timezone=$(cat /mnt/settings/time_ctl_timezone.conf)
+    timedatectl set-timezone $timezone
+else
+    timedatectl set-timezone UTC
+fi
+
+timedatectl set-local-rtc 1 > /dev/null 2>&1
+timedatectl set-local-rtc 0 > /dev/null 2>&1
+
+
+################################################################################
+# 5. mount external storage
+################################################################################
+
+vitos-external-storage-init
+
+################################################################################
+# 6. hifi init
+################################################################################
+
+m1-hifi-init
+
+################################################################################
+# 7. remove DAC use app config
+################################################################################
+
+rm -rf /mnt/settings/radio-shoutcast-play
+
+app=$(cat /mnt/settings/m1-dac-use-app.conf)
+if [ $app != "radio-shoutcast" ]; then
+    rm -rf /mnt/settings/m1-dac-use-app.conf
+fi
+
+################################################################################
+# 8. start mpd
+################################################################################
+
+cat /mnt/mpd/mpd.conf | grep "playlist_directory" > /dev/zero
+if [ $? -ne 0 ]; then # not config playlist_directory
+    echo "playlist_directory \"/mnt/mpd/playlists\"" >> /mnt/mpd/mpd.conf
+fi
+
+if [ ! -d "/mnt/mpd/playlists" ] ; then
+    mkdir /mnt/mpd/playlists
+fi
+
+if [ ! -f "/mnt/mpd/playlists/.silentangel_favorites_albums.m3u" ] ; then
+    touch /mnt/mpd/playlists/.silentangel_favorites_albums.m3u
+fi
+
+if [ ! -f "/mnt/mpd/playlists/.silentangel_favorites_artists.m3u" ] ; then
+    touch /mnt/mpd/playlists/.silentangel_favorites_artists.m3u
+fi
+
+if [ ! -f "/mnt/mpd/playlists/.silentangel_favorites_tracks.m3u" ] ; then
+    touch /mnt/mpd/playlists/.silentangel_favorites_tracks.m3u
+fi
+
+# sky
+# add
+# 1. add USB-DAC null buffer 1s
+# 2. add USB-DAC MQA Level
+# 20221006
+# begin
+#if [ ! -f "/mnt/settings/m1-usb-dac-null-buffer.conf" ] ; then
+#    echo "1000" > "/mnt/settings/m1-usb-dac-null-buffer.conf"
+#fi 
+if [ -f "/mnt/settings/m1-usb-dac-null-buffer.conf" ] ; then
+    rm -rf /mnt/settings/m1-usb-dac-null-buffer.conf
+fi 
+
+# check mqa-level
+dac_use=$(m1-dac-use)
+if [ $dac_use == "1" ]; then
+
+    result=$(cat /proc/asound/cards 2>/dev/null | grep USB-Audio | grep ']:' | awk '{print $1}')
+    if [[ -z ${result} ]]; then
+        # 0: not support mqa, 1: mqa only decoder, 2: mqa decoder and renderer
+        # mqa only decoder for M1-DAC
+        echo "1" > "/mnt/settings/m1-mqa-level.conf"
+    else
+        OLD_IFS="$IFS"
+        IFS=" "
+        array=($result)
+        IFS="$OLD_IFS"
+        audio_device_timestamp=0
+        for var in ${array[*]}
+        do
+            timestamp=$(date +%s -d "`stat /proc/asound/card$var | grep 'Modify:' | sed 's/Modify: //g'`")
+            if [[ 0 -eq $audio_device_timestamp ]]; then
+                audio_device_timestamp=$timestamp
+                audio_device_pcm_name=$var
+            elif [[ $timestamp -lt $audio_device_timestamp ]]; then
+                audio_device_timestamp=$timestamp
+                audio_device_pcm_name=$var
+            fi
+        done
+        usbid=$(cat /proc/asound/card${audio_device_pcm_name}/usbid)
+        usbid_arr=(${usbid/:/ })
+        vendor_id=${usbid_arr[0]}
+        product_id=${usbid_arr[1]}
+        mqa_mode=$(check_dac_mqa_level ${vendor_id} ${product_id})
+        # 0: not support mqa, 1: mqa only decoder, 2: mqa decoder and renderer
+        if [ $mqa_mode == "MQADecoder" ]; then
+            echo "0" > "/mnt/settings/m1-mqa-level.conf"
+        else
+            echo "1" > "/mnt/settings/m1-mqa-level.conf"
+        fi
+    fi
+else
+    echo "1" > "/mnt/settings/m1-mqa-level.conf"
+fi
+# end
+# 20221006
+# add
+# sky
+
+# check sample depth 32bits for float
+m1-check-mpd-conf-32
+
+systemctl start mpd.socket
+
+systemctl start mpd
+
+systemctl start vitos_player_status
+
+################################################################################
+# 9. init upmpdcli
+################################################################################
+
+chown -R upmpdcli:upmpdcli /mnt/upmpdcli
+
+m1-dlna-renderer-init
+
+################################################################################
+# 10. init spotify-connect
+################################################################################
+
+m1-spotify-connect-init
+
+################################################################################
+# 11. init AirPlay2
+################################################################################
+
+m1-shairport-sync-init
+
+################################################################################
+# 12. start roon-ready
+################################################################################
+
+m1-roon-ready-init
+
+# 13. USB-DAC reset
+if [ $dac_use == "1" ]; then
+   m1-dac-use usbdac
+fi
+
+################################################################################
+# 14. start bcast_server
+################################################################################
+
+systemctl start bcast_server
+
+################################################################################
+# 15. close leds
+################################################################################
+echo "none" > /sys/class/leds/led_dsd/trigger
+echo 0 > /sys/class/leds/led_dsd/brightness
+

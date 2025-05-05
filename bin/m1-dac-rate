@@ -1,0 +1,8 @@
+#!/bin/sh
+
+dac_mode=$(m1-dac-use)
+if [ $dac_mode -ne 0 ]; then
+    m1-usb-dac-output-conf pcm-sample-rate
+else
+    m1-dac-output-conf pcm-sample-rate
+fi

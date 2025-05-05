@@ -1,0 +1,15 @@
+
+if [ ! -d "/mnt/roon-ready" ] ; then
+    mkdir "/mnt/roon-ready"
+fi
+
+dac_use=$(m1-dac-use)
+if [ $dac_use -eq 0 ]; then
+    m1-roon-ready-conf
+else
+    m1-roon-ready-usb-conf
+fi
+
+if [ ! -f "/mnt/roon-ready/stop" ] ; then
+    systemctl restart roon-ready > /dev/null 2>&1
+fi

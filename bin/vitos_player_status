@@ -1,0 +1,144 @@
+#!/bin/sh
+
+RECORD_PATH="/mnt/settings/m1-thunder-player-status.log"
+play_status=""
+music_platform=""
+player_status_pre=""
+player_status=""
+player_cmd_pre=""
+player_cmd=""
+
+echo "" > $RECORD_PATH
+
+while [ true ]
+do 
+    inotifywait -mqr --format '%f' -e modify "${RECORD_PATH}" | while read dir ; do
+         play_status=$(cat $RECORD_PATH)
+         if [ "$player_status_pre" != "$play_status" ]; then
+
+             echo $play_status
+             
+             # copy pre player_status
+             player_status_pre=$play_status
+
+             # copy pre player_cmd
+             if [ "$player_cmd" != "Periodic" ] && [ "$player_cmd" != "Seek" ]; then
+                 player_cmd_pre=$player_cmd
+             fi
+             
+             # cut cmd
+             player_cmd=$(echo "${play_status}" | cut -d' ' -f1)
+
+             # not error, check music_platform if TuneIn
+             if [ "$player_cmd" != "Error" ]; then
+                 result=$(echo "$play_status" | grep "http://online.silentangel.audio/tunein")
+                 if [ "$result" != "" ]; then
+                     music_platform="TuneIn"
+                 else
+                     # play else music_platform
+                     if [ "$music_platform" = "TuneIn" ]; then
+                         python /srv/py/tunein/tunein_report.py "report_listen" "STOP" &
+                     fi
+                     music_platform=""
+                     continue
+                 fi
+             fi
+
+             case $player_cmd in
+                 "CurlOpen")
+                     echo "CurlOpen"
+                     continue
+                 ;; # CurlOpen
+                 "Error")
+                     echo "$play_status"
+                     echo "$player_cmd_pre"
+                     if [ "$player_cmd_pre" = "CurlOpen" ]; then
+                         # connect fail
+                         echo "connect fail"
+                         python /srv/py/tunein/tunein_report.py "report_stream" "FAILURE" &
+                     else
+                         result=$(echo "$play_status" | grep "Error Connection timed out")
+                         if [ "$result" != "" ]; then
+                             echo "connect timed out"
+                             python /srv/py/tunein/tunein_report.py "report_stream" "FAILURE" &
+                         else
+                             # player fail
+                             echo "player fail"
+                             echo $player_cmd_pre
+                             python /srv/py/tunein/tunein_report.py "report_listen" "FAIL" &
+                         fi
+                     fi
+                 ;; # Error
+                 "Play")
+                     echo "Play"
+                     if [ "$player_cmd_pre" = "Pause" ]; then
+                         # Paused then play
+                         echo "Paused then play"
+                         python /srv/py/tunein/tunein_report.py "report_listen" "PAUSE" &
+                     else
+                         echo "play"
+                         python /srv/py/tunein/tunein_report.py "report_stream" "SUCCESS" &
+                     fi
+                 ;; # Play
+                 "Stop")
+                     echo "Stop"
+                     if [ "$player_cmd_pre" != "Error" ]; then
+                         python /srv/py/tunein/tunein_report.py "report_listen" "STOP" &
+                     fi
+#                     if [ "$player_cmd_pre" = "Play" ]; then
+#                         # play then stop
+#                         echo "play then stop"
+#                         python /srv/py/tunein/tunein_report.py "report_listen" "STOP" &
+#                     elif [ "$player_cmd_pre" = "Pause" ]; then
+#                         # pause then stop
+#                         echo "pause then stop"
+#                         python /srv/py/tunein/tunein_report.py "report_listen" "STOP" &
+#                     fi
+                 ;; # Stop
+                 "Pause")
+                     # pause
+                     echo "Pause"
+                     python /srv/py/tunein/tunein_report.py "report_listen" "PAUSE" &
+                 ;; # Pause
+                 "Seek")
+                     # seek
+                     echo "Seek"
+                     python /srv/py/tunein/tunein_report.py "report_listen" "PERIODIC" &
+                 ;; # Seek
+                 "Periodic")
+                     # Periodic
+                     echo "Periodic"
+                     python /srv/py/tunein/tunein_report.py "report_listen" "PERIODIC" &
+                 ;; # Periodic
+                 "End")
+                     # End
+                     echo "End"
+                     if [ "$player_cmd_pre" != "Error" ]; then
+                         python /srv/py/tunein/tunein_report.py "report_listen" "END" &
+                     fi
+                 ;; # End
+                 *)
+                     # else do nothing
+                     continue
+                 ;;
+             esac # case
+         fi
+    done
+
+#    echo "timeout 10s"
+#
+#    play_status_t=$(cat $RECORD_PATH)
+#    result=$(echo "$play_status_t" | grep "Play http://online.silentangel.audio/tunein")
+#    if [ "$result" != "" ]; then
+#        echo "PERIODIC"
+#        python /srv/py/tunein/tunein_report.py "report_listen" "PERIODIC" &
+#        continue
+#    fi
+#
+#    result=$(echo "$play_status_t" | grep "Pause http://online.silentangel.audio/tunein")
+#    if [ "$result" != "" ]; then
+#        echo "PERIODIC"
+#        python /srv/py/tunein/tunein_report.py "report_listen" "PERIODIC" &
+#    fi
+    
+done
